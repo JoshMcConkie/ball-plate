@@ -8,7 +8,7 @@ CAMERA_ID = 0
 
 if SERIAL_ON:
     '''Time constraints'''
-    last_send = 0.0
+    last_send = 0.0 # Initialize
     SEND_INTERVAL = 1.0/50.0 # aka 50 Hz
 
 
