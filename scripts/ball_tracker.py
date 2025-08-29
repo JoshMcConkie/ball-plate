@@ -3,54 +3,54 @@ import numpy as np
 import time
 import serial
 
-'''Time constraints'''
-last_send = 0.0
-SEND_INTERVAL = 1.0/50.0 # aka 50 Hz
+SERIAL_ON = False
+CAMERA_ID = 0
+
+if SERIAL_ON:
+    '''Time constraints'''
+    last_send = 0.0
+    SEND_INTERVAL = 1.0/50.0 # aka 50 Hz
 
 
-'''Serial'''
-ser = serial.Serial('COM10', 115200, timeout=1)
-time.sleep(2)
-banner = ser.readline().decode(errors='ignore').strip()
-print("Banner:", banner)
+    '''Serial'''
+    ser = serial.Serial('COM10', 115200, timeout=1)
+    time.sleep(2)
+    banner = ser.readline().decode(errors='ignore').strip()
+    print("Banner:", banner)
 
 '''Tracking + Packet send'''
-# Start the webcam
-cap = cv2.VideoCapture(1)
-
-
-cx_1 = None
-cy_1 = None
-
+cx_1 = None # previous centroid x coordinate
+cy_1 = None # previous centroid y coordinate
 vx = 0
 vy = 0
-
 prev_t = None
 
+# Start the webcam
+feed = cv2.VideoCapture(CAMERA_ID)
 while True:
     # Read frame
-    ret, frame = cap.read()
-
-    # convert to HSV
+    ret, frame = feed.read()
+    if not ret:
+        break
+    # Convert to HSV
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    # My ball is green, change the below bounds for different color
+    # The ball in use is green. Change the below bounds for different color.
     lower_green = np.array([40,70,70])
     upper_green = np.array([80, 255, 255])
 
-    # binary mask
+    # Binary mask (green:1 else:0)
     mask = cv2.inRange(hsv, lower_green, upper_green)
     mask = cv2.erode(mask, None, iterations=2)
     mask = cv2.dilate(mask,None, iterations=2)
-    
+    # Identify the ball contour within the mask
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 
-    if contours:
+    if contours: # Prevents break if no green in frame
 
         c = max(contours, key=cv2.contourArea)
 
-
-        # initial circle around contour
+        # Initial circle around ball
         (x,y), radius = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
 
@@ -60,16 +60,17 @@ while True:
             now = time.time()
             cx = int(M["m10"] /M["m00"])
             cy = int(M["m01"] /M["m00"])
-            if cx_1 is not None and cy_1 is not None and prev_t is not None:
+            if cx_1 is not None and cy_1 is not None and prev_t is not None: 
                 dt = now - prev_t
                 vx = (cx - cx_1)/dt
                 vy = (cy - cy_1)/dt
                 # print(f"Ball position: ({cx}, {cy}); Velocity (p/s): ({vx}, {vy})")
 
-                # Only send packet if it follows the Hz constraint
-                if (now - last_send) >= SEND_INTERVAL:
+                # Only send packet if it follows the Hz constraint (50 Hz)
+                # Packet Format: "float(x),float(y),int(vx),int(vy)"
+                if SERIAL_ON and (now - last_send) >= SEND_INTERVAL:
                     # build a packet
-                    packet = f"{cx},{cy},{int(vx)},{int(vy)}\n"
+                    packet = f"{cx},{cy},{int(vx)},{int(vy)}\n" #
                     try: # send/recieve from arduino through serial
                         ser.write(packet.encode('utf-8'))
                         echo = ser.readline().decode(errors='ignore').strip()
@@ -78,26 +79,20 @@ while True:
                     except Exception as e:
                         print("Serial write failed:", e)
               
-            else:
+            else: # first frame rule
                 print(f"Ball position: ({cx}, {cy}); Velocity (p/s): (N/A)")
                 
-            # draw for visual feedback
+            # Illustrate circle on out frame
             cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
             cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
 
             cx_1, cy_1 = cx, cy
             prev_t = now
 
-
-
-
-    if not ret:
-        break
-
     cv2.imshow("Webcam Feed", frame)
 
-    if cv2.waitKey(1) == 27:
+    if cv2.waitKey(1) == 27: # Esc key exit
         break
 
-cap.release()
+feed.release()
 cv2.destroyAllWindows()
