@@ -3,8 +3,8 @@ import numpy as np
 import time
 import serial
 
-SERIAL_ON = False
-CAMERA_ID = 0
+SERIAL_ON = True
+CAMERA_ID = 1
 
 if SERIAL_ON:
     '''Time constraints'''
@@ -13,7 +13,7 @@ if SERIAL_ON:
 
 
     '''Serial'''
-    ser = serial.Serial('COM10', 115200, timeout=1)
+    ser = serial.Serial('COM3', 115200, timeout=1)
     time.sleep(2)
     banner = ser.readline().decode(errors='ignore').strip()
     print("Banner:", banner)
@@ -27,6 +27,8 @@ prev_t = None
 
 # Start the webcam
 feed = cv2.VideoCapture(CAMERA_ID)
+ret0,frame0 = feed.read()
+
 while True:
     # Read frame
     ret, frame = feed.read()
