@@ -65,8 +65,8 @@ void loop() {
         double de_x = (error_x - error_x_1) / dt;
         double de_y = (error_y - error_y_1) / dt;
 
-        double signal_x = (Kp * err_x) + (Kd * de_x);
-        double signal_y = (Kp * err_y) + (Kd * de_y);
+        double signal_x = (Kp * error_x) + (Kd * de_x);
+        double signal_y = (Kp * error_y) + (Kd * de_y);
 
         // Convert to servo angle (center = 90°)
         angle_x = constrain(90 + signal_x, MIN_ANG, MAX_ANG);
