@@ -2,9 +2,56 @@ import cv2
 import numpy as np
 import time
 import serial
+from pupil_apriltags import Detector
 
 SERIAL_ON = True
 CAMERA_ID = 1
+
+# Table
+TAG_TABLE_COORDS = {
+    0: (-90.0, -90.0),
+    1: (-90.0, 90.0),
+    2: (90.0, 90.0),
+    3: (90.0, -90.0)
+}
+UNDISTORT = False
+
+
+# -------- APRILTAG DETECTOR ------
+detector = Detector(
+    families='tag36h11',
+    nthreads=4,
+    quad_decimate=2.0,
+    quad_sigma=0.0,
+    refine_edges=1,
+    decode_sharpening=0.25
+)
+
+# ---------- HELPERS --------
+def homography(uv_pts, x_pts):
+
+    if len(uv_pts) < 4:
+        return None
+    H, mask = cv2.findHomography(uv_pts, x_pts, cv2.RANSAC, ransacReprojThreshold=2.0)
+    return H
+def map_pixel_to_table(H, u, v):
+    """Homogeneous mapping"""
+    p = H @ np.array([u,v,1.0], dtype=np.float64)
+    if abs(p[2]) < 1e-9: # avoid noise
+        return None
+    return (p[0] / p[2], p[1] / p[2])
+
+def order_pairs_by_id(detections, id_to_xy):
+    uv, xy = [],[]
+    for d in detections:
+        tid = d.tag_id
+        if tid in id_to_xy:
+            u,v = d.center
+            uv.append([u,v])
+            xy.append(id_to_xy[tid])
+    return np.array(uv, dtype=np.float32), np.array(xy, dtype=np.float32)
+
+
 
 if SERIAL_ON:
     '''Time constraints'''
@@ -34,8 +81,18 @@ while True:
     ret, frame = feed.read()
     if not ret:
         break
+
+    # table
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    detections = detector.detect(gray, estimate_tag_pose=False, camera_params=None, tag_size=None)
+    tags_uv, tags_xy = order_pairs_by_id(detections, TAG_TABLE_COORDS)
+    
+    H = homography(tags_uv,tags_xy)
+    # ball
     # Convert to HSV
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+ 
+
     # The ball in use is green. Change the below bounds for different color.
     lower_green = np.array([40,70,70])
     upper_green = np.array([80, 255, 255])
@@ -53,15 +110,23 @@ while True:
         c = max(contours, key=cv2.contourArea)
 
         # Initial circle around ball
-        (x,y), radius = cv2.minEnclosingCircle(c)
+        (u,v), radius = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
 
     
         # getting center point of contour
         if M["m00"] > 0 and radius > 8:
             now = time.time()
-            cx = int(M["m10"] /M["m00"])
-            cy = int(M["m01"] /M["m00"])
+
+            # table
+
+
+            ball_cu = int(M["m10"] /M["m00"])
+            ball_cv = int(M["m01"] /M["m00"])
+            if H is None:
+                cx,cy = cx_1,cy_1
+            else:
+                cx, cy = map_pixel_to_table(H, ball_cu,ball_cv)
             if cx_1 is not None and cy_1 is not None and prev_t is not None: 
                 dt = now - prev_t
                 vx = (cx - cx_1)/dt
@@ -72,9 +137,10 @@ while True:
                 # Packet Format: "float(x),float(y),int(vx),int(vy)"
                 if SERIAL_ON and (now - last_send) >= SEND_INTERVAL:
                     # build a packet
-                    packet = f"{cx},{cy},{int(vx)},{int(vy)}\n" #
+                    packet = f"{int(cx)},{int(cy)},{int(vx)},{int(vy)}\n" #
                     try: # send/recieve from arduino through serial
                         ser.write(packet.encode('utf-8'))
+                        print(packet)
                         echo = ser.readline().decode(errors='ignore').strip()
                         print("Echo:", echo)
                         last_send = now
@@ -85,8 +151,8 @@ while True:
                 print(f"Ball position: ({cx}, {cy}); Velocity (p/s): (N/A)")
                 
             # Illustrate circle on out frame
-            cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-            cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
+            cv2.circle(frame, (int(u), int(v)), int(radius), (0, 255, 255), 2)
+            cv2.circle(frame, (ball_cu, ball_cv), 4, (0, 0, 255), -1)
 
             cx_1, cy_1 = cx, cy
             prev_t = now
