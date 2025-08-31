@@ -50,6 +50,8 @@ void loop() {
   else if (c=='c') { us1 = us2 = 1500; }
   else if (c=='m') mn = u;    // record current as MIN
   else if (c=='M') mx = u;    // record current as MAX
+  else if (c=='t') { us1 = CLAMP_MIN; us2 = CLAMP_MAX; }
+  else if (c=='b') { us1 = CLAMP_MAX; us2 = CLAMP_MIN; }
   writeCmds();
   printState();
 }
