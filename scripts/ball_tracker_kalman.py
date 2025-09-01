@@ -4,7 +4,7 @@ import time
 import serial
 from pupil_apriltags import Detector
 
-SERIAL_ON = True
+SERIAL_ON = False
 CAMERA_ID = 0
 
 # Table
@@ -41,6 +41,14 @@ def map_pixel_to_table(H, u, v):
         return None
     return (p[0] / p[2], p[1] / p[2])
 
+def map_table_to_pixel(H, x, y):
+    H_inv = np.linalg.solve(H,np.eye(3))
+    p = H_inv @ np.array([x, y, 1.0], dtype=np.float64)
+    if abs(p[2]) < 1e-9:
+        return None
+    return (p[0] / p[2], p[1] / p[2])
+
+
 def order_pairs_by_id(detections, id_to_xy):
     uv, xy = [],[]
     for d in detections:
@@ -51,7 +59,21 @@ def order_pairs_by_id(detections, id_to_xy):
             xy.append(id_to_xy[tid])
     return np.array(uv, dtype=np.float32), np.array(xy, dtype=np.float32)
 
-def run_kalman_filter(X,X_1,P_1):
+# Q for kalman filter
+def make_Q(dt, sigma_a=30):
+    Q1D = sigma_a**2 * np.array([
+        [dt**4/4, dt**3/2],
+        [dt**3/2, dt**2]
+    ])
+    return np.block([
+        [Q1D, np.zeros((2,2))],
+        [np.zeros((2,2)), Q1D]
+    ])
+
+def run_kalman_filter(Z,X_1,P_1,R,Q, dt):
+
+    
+
     '''Physical AR process: X_t = AX_t-1 + w_t
     Explanation: The actual current state of the ball is a sum of the previous state
     changed by a step in time; in this case, A effectively adds a to the position states
@@ -63,15 +85,14 @@ def run_kalman_filter(X,X_1,P_1):
     A = np.block([[I2, dt*I2], [np.zeros((2,2)), I2]])
 
     X_hat_init = A@X_1
-    W = X - X_hat_init
 
     ''' Calculating P is '''
     
-    P_pred = A @ P_1 @ A.T + W @ W.T
+    P_pred = A @ P_1 @ A.T + Q
 
     '''Sensor MA process: Y_t = HX_t + v_t
     Explanation: The measured state read by the camera is a sum of the actual state
-    X and some measurement noise. The H selects what aspects of the true state vector
+    X and some measurement noise. The H projects what aspects of the true state vector
     are actually seen (by the camera in this case). Y_t is not an estimate (with a hat)
     because it is observed data, not a hidden measurement. So in other words:
     CameraCoords = [crop to x/y coords][full state vector] + [measurement noise]
@@ -81,15 +102,17 @@ def run_kalman_filter(X,X_1,P_1):
     We rearrange the equation to solve for the residual, r
     '''
 
-    H = np.array([[1,0,0,0],[0,1,0,0]])
-    Y_hat = H @ X_hat_init
-    Y = H @ X
-    R = Y - Y_hat
-    S = H @ P_pred @ H.T + R
-    K = P_pred @ H.T @ np.linalg.inv(S)
+    H_kf = np.array([[1,0,0,0],[0,1,0,0]])
+    Y_hat = H_kf @ X_hat_init
+    residual = Z - Y_hat
+    S = H_kf @ P_pred @ H_kf.T + R
+    K = P_pred @ H_kf.T @ np.linalg.solve(S, I2)
     
 
-    X_hat_final = X_hat_init + K @ R
+    X_new = X_hat_init + K @ residual
+    P_new = (np.eye(4) - K @ H_kf) @ P_pred
+    
+    return X_new, P_new
 
 if SERIAL_ON:
     '''Time constraints'''
@@ -108,10 +131,39 @@ cx_1 = None # previous centroid x coordinate
 cy_1 = None # previous centroid y coordinate
 vx = 0
 vy = 0
-prev_t = None
+vx_1 = 0
+vy_1 = 0
+# Freeze H
+H_fixed = None
 
+prev_t = None
+X_filtered = None
+X_filtered_1 = None
+
+# Initializing measurement noise covariance for kalman filter (R)
+initialized = False
+Y_init_hist = []
+R = None
+P = np.diag([100,100,1000,1000])
 # Start the webcam
 feed = cv2.VideoCapture(CAMERA_ID)
+
+
+
+print("Type (y) when ball is stationary on platform. Press (n) to skip calibration. Press esc to quit.\n")
+while True:
+    ret, frame = feed.read()
+    cv2.imshow("Webcam Feed", frame)
+    k = cv2.waitKey(1) & 0xFF
+    if k == ord('y'):
+        break
+    if k == 27:  # Esc
+        feed.release()
+        cv2.destroyAllWindows()
+        raise SystemExit
+print("Initializing. Keep ball still.")
+    
+
 ret0,frame0 = feed.read()
 
 while True:
@@ -126,6 +178,7 @@ while True:
     tags_uv, tags_xy = order_pairs_by_id(detections, TAG_TABLE_COORDS)
     
     H = homography(tags_uv,tags_xy)
+    H_use = H_fixed if (initialized and H_fixed is not None) else H
     # ball
     # Convert to HSV
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -155,7 +208,6 @@ while True:
         (u,v), radius = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
 
-    
         # getting center point of contour
         if M["m00"] > 0 and radius > 8:
             now = time.time()
@@ -164,11 +216,39 @@ while True:
             if H is None:
                 cx,cy = cx_1,cy_1
             else:
-                cx, cy = map_pixel_to_table(H, ball_cu,ball_cv)
-            if cx_1 is not None and cy_1 is not None and prev_t is not None: 
+                mapped = map_pixel_to_table(H_use, ball_cu,ball_cv)
+                if mapped is None:
+                    prev_t = now
+                    continue
+                cx,cy = mapped
+
+            if not initialized and H_use is not None:
+                    print("...")
+                    if np.isfinite(cx) and np.isfinite(cy):
+                        Y_init_hist.append([cx,cy])
+                        print(f"Clean Entry {len(Y_init_hist)}: {cx}, {cy}")
+                    if len(Y_init_hist) > 500:
+                        
+                        R = np.cov(np.array(Y_init_hist), rowvar=False)
+                        R_use = R * 4.0
+                        H_fixed = None if H is None else H.copy()
+                        print(f"R-matrix: {R}")
+                        initialized = True
+            elif H_use is not None and initialized and cx_1 is not None and cy_1 is not None and prev_t is not None: 
                 dt = now - prev_t
                 vx = (cx - cx_1)/dt
                 vy = (cy - cy_1)/dt
+                Z = np.array([cx,cy])
+
+                X = np.array([cx,cy,vx,vy])
+                if X_filtered_1 is None:
+                    X_filtered_1 = np.array([cx,cy,0,0])
+                Q = make_Q(dt)
+                X_filtered, P = run_kalman_filter(Z,X_filtered_1,P,R,Q,dt)
+                cx,cy,vx,vy = X_filtered
+                
+                kalman_u,kalman_v = map_table_to_pixel(H_use,cx,cy)
+                cv2.circle(frame, (int(kalman_u), int(kalman_v)), int(radius)+4, (255, 255, 255), 2)
                 # print(f"Ball position: ({cx}, {cy}); Velocity (p/s): ({vx}, {vy})")
 
                 # Only send packet if it follows the Hz constraint (50 Hz)
@@ -184,15 +264,18 @@ while True:
                         last_send = now
                     except Exception as e:
                         print("Serial write failed:", e)
+                
               
-            else: # first frame rule
+            elif initialized: # first frame rule
                 print(f"Ball position: ({cx}, {cy}); Velocity (p/s): (N/A)")
                 
             # Illustrate circle on out frame
-            cv2.circle(frame, (int(u), int(v)), int(radius), (0, 255, 255), 2)
-            cv2.circle(frame, (ball_cu, ball_cv), 4, (0, 0, 255), -1)
+            cv2.circle(frame, (int(u), int(v)), int(radius), (0, 255, 255),2)
+            cv2.circle(frame, (ball_cu, ball_cv), 4, (0, 0, 255), -1)                
 
-            cx_1, cy_1 = cx, cy
+            cx_1, cy_1, vx_1, vy_1 = cx, cy, vx, vy
+            if X_filtered is not None:
+                X_filtered_1 = X_filtered
             prev_t = now
 
     # cv2.imshow("Webcam Feed", mask)
