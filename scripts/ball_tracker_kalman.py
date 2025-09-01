@@ -51,7 +51,45 @@ def order_pairs_by_id(detections, id_to_xy):
             xy.append(id_to_xy[tid])
     return np.array(uv, dtype=np.float32), np.array(xy, dtype=np.float32)
 
+def run_kalman_filter(X,X_1,P_1):
+    '''Physical AR process: X_t = AX_t-1 + w_t
+    Explanation: The actual current state of the ball is a sum of the previous state
+    changed by a step in time; in this case, A effectively adds a to the position states
+    a time step of each velocity state. We then add w to account for environment shocks
+    to the system.
+    '''
+    # recall that X = [x,y,vx,vy]
+    I2 = np.eye(2)
+    A = np.block([[I2, dt*I2], [np.zeros((2,2)), I2]])
 
+    X_hat_init = A@X_1
+    W = X - X_hat_init
+
+    ''' Calculating P is '''
+    
+    P_pred = A @ P_1 @ A.T + W @ W.T
+
+    '''Sensor MA process: Y_t = HX_t + v_t
+    Explanation: The measured state read by the camera is a sum of the actual state
+    X and some measurement noise. The H selects what aspects of the true state vector
+    are actually seen (by the camera in this case). Y_t is not an estimate (with a hat)
+    because it is observed data, not a hidden measurement. So in other words:
+    CameraCoords = [crop to x/y coords][full state vector] + [measurement noise]
+    Here, we are using x/y coords instead of u/v pixel coords because this filter is
+    called after the change of variables using our homogeneous mapping. 
+
+    We rearrange the equation to solve for the residual, r
+    '''
+
+    H = np.array([[1,0,0,0],[0,1,0,0]])
+    Y_hat = H @ X_hat_init
+    Y = H @ X
+    R = Y - Y_hat
+    S = H @ P_pred @ H.T + R
+    K = P_pred @ H.T @ np.linalg.inv(S)
+    
+
+    X_hat_final = X_hat_init + K @ R
 
 if SERIAL_ON:
     '''Time constraints'''
