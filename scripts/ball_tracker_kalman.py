@@ -60,17 +60,22 @@ def order_pairs_by_id(detections, id_to_xy):
     return np.array(uv, dtype=np.float32), np.array(xy, dtype=np.float32)
 
 # Q for kalman filter
-def make_Q(dt, sigma_a=30):
-    Q1D = sigma_a**2 * np.array([
+# Edit: had to seperate the sigmas because x-axis was lagging
+def make_Q(dt, sigma_ax=50, sigma_ay=50):
+    Q1D_x = sigma_ax**2 * np.array([
+        [dt**4/4, dt**3/2],
+        [dt**3/2, dt**2]
+    ])
+    Q1D_y = sigma_ay**2 * np.array([
         [dt**4/4, dt**3/2],
         [dt**3/2, dt**2]
     ])
     return np.block([
-        [Q1D, np.zeros((2,2))],
-        [np.zeros((2,2)), Q1D]
+        [Q1D_x, np.zeros((2,2))],
+        [np.zeros((2,2)), Q1D_y]
     ])
 
-def run_kalman_filter(Z,X_1,P_1,R,Q, dt):
+def run_kalman_filter(X,X_1,P_1,R,Q, dt):
 
     
 
@@ -104,7 +109,8 @@ def run_kalman_filter(Z,X_1,P_1,R,Q, dt):
 
     H_kf = np.array([[1,0,0,0],[0,1,0,0]])
     Y_hat = H_kf @ X_hat_init
-    residual = Z - Y_hat
+    Y = H_kf @ X
+    residual = Y - Y_hat
     S = H_kf @ P_pred @ H_kf.T + R
     K = P_pred @ H_kf.T @ np.linalg.solve(S, I2)
     
@@ -148,7 +154,8 @@ P = np.diag([100,100,1000,1000])
 # Start the webcam
 feed = cv2.VideoCapture(CAMERA_ID)
 
-
+# prevent dt bomb
+MAX_DT = 0.1
 
 print("Type (y) when ball is stationary on platform. Press (n) to skip calibration. Press esc to quit.\n")
 while True:
@@ -236,15 +243,19 @@ while True:
                         initialized = True
             elif H_use is not None and initialized and cx_1 is not None and cy_1 is not None and prev_t is not None: 
                 dt = now - prev_t
+                if dt > MAX_DT:
+                    print(f"Large dt detected ({dt:.2f}s), resetting filter.")
+                    X_filtered_1 = None  # Reset the filter's memory
+                    prev_t = now         # IMPORTANT: Update time to prevent repeated resets
+                    continue             # Skip to the next frame
                 vx = (cx - cx_1)/dt
                 vy = (cy - cy_1)/dt
-                Z = np.array([cx,cy])
 
                 X = np.array([cx,cy,vx,vy])
                 if X_filtered_1 is None:
                     X_filtered_1 = np.array([cx,cy,0,0])
                 Q = make_Q(dt)
-                X_filtered, P = run_kalman_filter(Z,X_filtered_1,P,R,Q,dt)
+                X_filtered, P = run_kalman_filter(X,X_filtered_1,P,R,Q,dt)
                 cx,cy,vx,vy = X_filtered
                 
                 kalman_u,kalman_v = map_table_to_pixel(H_use,cx,cy)
