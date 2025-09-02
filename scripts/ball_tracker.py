@@ -70,6 +70,8 @@ cx_1 = None # previous centroid x coordinate
 cy_1 = None # previous centroid y coordinate
 vx = 0
 vy = 0
+vx_1 = 0
+vy_1 = 0
 prev_t = None
 
 # Start the webcam
@@ -131,13 +133,16 @@ while True:
                 dt = now - prev_t
                 vx = (cx - cx_1)/dt
                 vy = (cy - cy_1)/dt
+                alpha = .8
+                fvx = alpha*vx+(1-alpha)*vx_1
+                fvy = alpha*vy+(1-alpha)*vy_1
                 # print(f"Ball position: ({cx}, {cy}); Velocity (p/s): ({vx}, {vy})")
 
                 # Only send packet if it follows the Hz constraint (50 Hz)
                 # Packet Format: "float(x),float(y),int(vx),int(vy)"
                 if SERIAL_ON and (now - last_send) >= SEND_INTERVAL:
                     # build a packet
-                    packet = f"{int(cx)},{int(cy)},{int(vx)},{int(vy)}\n" #
+                    packet = f"{int(cx)},{int(cy)},{int(fvx)},{int(fvy)}\n" #
                     try: # send/recieve from arduino through serial
                         ser.write(packet.encode('utf-8'))
                         print(packet)
@@ -153,7 +158,7 @@ while True:
             # Illustrate circle on out frame
             cv2.circle(frame, (int(u), int(v)), int(radius), (0, 255, 255), 2)
             cv2.circle(frame, (ball_cu, ball_cv), 4, (0, 0, 255), -1)
-
+            vx_1,vy_1 = vx, vy
             cx_1, cy_1 = cx, cy
             prev_t = now
 
