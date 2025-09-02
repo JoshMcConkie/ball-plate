@@ -4,7 +4,7 @@ import time
 import serial
 from pupil_apriltags import Detector
 
-SERIAL_ON = False
+SERIAL_ON = True
 CAMERA_ID = 0
 
 # Table
@@ -61,7 +61,7 @@ def order_pairs_by_id(detections, id_to_xy):
 
 # Q for kalman filter
 # Edit: had to seperate the sigmas because x-axis was lagging
-def make_Q(dt, sigma_ax=50, sigma_ay=50):
+def make_Q(dt, sigma_ax=20, sigma_ay=10):
     Q1D_x = sigma_ax**2 * np.array([
         [dt**4/4, dt**3/2],
         [dt**3/2, dt**2]
@@ -87,6 +87,7 @@ def run_kalman_filter(X,X_1,P_1,R,Q, dt):
     '''
     # recall that X = [x,y,vx,vy]
     I2 = np.eye(2)
+    I4 = np.eye(4)
     A = np.block([[I2, dt*I2], [np.zeros((2,2)), I2]])
 
     X_hat_init = A@X_1
@@ -94,6 +95,11 @@ def run_kalman_filter(X,X_1,P_1,R,Q, dt):
     ''' Calculating P is '''
     
     P_pred = A @ P_1 @ A.T + Q
+    # Prevent collapse (especially on x)
+    POS_FLOOR = 2e-2   # try 0.02; adjust to taste (0.01–0.05)
+    P_pred[0,0] = max(P_pred[0,0], POS_FLOOR)
+    P_pred[1,1] = max(P_pred[1,1], POS_FLOOR)
+    print("Ppred_pos=", np.diag(P_pred)[:2])
 
     '''Sensor MA process: Y_t = HX_t + v_t
     Explanation: The measured state read by the camera is a sum of the actual state
@@ -106,18 +112,47 @@ def run_kalman_filter(X,X_1,P_1,R,Q, dt):
 
     We rearrange the equation to solve for the residual, r
     '''
-
+    # R = 0.5*(R + R.T)
+    # w,V = np.linalg.eigh(R)
+    # R = (V * np.clip(w, 1e-4, None)) @ V.T
     H_kf = np.array([[1,0,0,0],[0,1,0,0]])
     Y_hat = H_kf @ X_hat_init
     Y = H_kf @ X
     residual = Y - Y_hat
     S = H_kf @ P_pred @ H_kf.T + R
+    # nis = residual.T @ np.linalg.solve(S, residual)  # scalar
+    # if nis > 16.3:           # ~99% for 2D
+    #     return X_hat_init, P_pred  # skip update this frame
+
+    # print("diag(R)=", np.diag(R),
+    #   " diag(S)=", np.diag(S))
+
     K = P_pred @ H_kf.T @ np.linalg.solve(S, I2)
     
+    
+
 
     X_new = X_hat_init + K @ residual
-    P_new = (np.eye(4) - K @ H_kf) @ P_pred
+    # P_new = (np.eye(4) - K @ H_kf) @ P_pred
+    #Joseph form
+    M = (I4 - K @ H_kf)
+    P_new = M @ P_pred @ M.T + K @ R @ K.T
+    P_new = 0.5 * (P_new + P_new.T)
+
+    # after computing residual, S, K:
+    nis = float(residual.T @ np.linalg.solve(S, residual))
     
+    GATE_95 = 5.991
+    # if nis > GATE_95:
+    #     # Skip update on this frame: keep prediction
+    #     x_new, P_new = X_hat_init, P_pred
+    #     # (Optional) slightly inflate P to reflect uncertainty after a missed update
+    #     P_new *= 1.02
+    #     # (Optional) log: print(f"Gate hit: NIS={nis:.2f}")
+    #     return x_new, P_new
+
+    Kx, Ky = K[0,0], K[1,1]          # position gains
+    print(f"NIS={nis:.2f}  Kx={Kx:.3f} Ky={Ky:.3f}")
     return X_new, P_new
 
 if SERIAL_ON:
@@ -150,7 +185,7 @@ X_filtered_1 = None
 initialized = False
 Y_init_hist = []
 R = None
-P = np.diag([100,100,1000,1000])
+P = np.diag([10.0,10.0,1.0,1.0])
 # Start the webcam
 feed = cv2.VideoCapture(CAMERA_ID)
 
@@ -234,32 +269,33 @@ while True:
                     if np.isfinite(cx) and np.isfinite(cy):
                         Y_init_hist.append([cx,cy])
                         print(f"Clean Entry {len(Y_init_hist)}: {cx}, {cy}")
-                    if len(Y_init_hist) > 500:
+                    if len(Y_init_hist) > 100:
                         
                         R = np.cov(np.array(Y_init_hist), rowvar=False)
-                        R_use = R * 4.0
+                        R_use = R * .25
                         H_fixed = None if H is None else H.copy()
                         print(f"R-matrix: {R}")
                         initialized = True
             elif H_use is not None and initialized and cx_1 is not None and cy_1 is not None and prev_t is not None: 
                 dt = now - prev_t
+                
                 if dt > MAX_DT:
                     print(f"Large dt detected ({dt:.2f}s), resetting filter.")
                     X_filtered_1 = None  # Reset the filter's memory
                     prev_t = now         # IMPORTANT: Update time to prevent repeated resets
                     continue             # Skip to the next frame
-                vx = (cx - cx_1)/dt
-                vy = (cy - cy_1)/dt
-
-                X = np.array([cx,cy,vx,vy])
+                # vx = (cx - cx_1)/dt
+                # vy = (cy - cy_1)/dt
+                Z = np.array([cx,cy,0,0])
+                # X = np.array([cx,cy,vx,vy])
                 if X_filtered_1 is None:
                     X_filtered_1 = np.array([cx,cy,0,0])
                 Q = make_Q(dt)
-                X_filtered, P = run_kalman_filter(X,X_filtered_1,P,R,Q,dt)
+                X_filtered, P = run_kalman_filter(Z,X_filtered_1,P,R_use,Q,dt)
                 cx,cy,vx,vy = X_filtered
                 
                 kalman_u,kalman_v = map_table_to_pixel(H_use,cx,cy)
-                cv2.circle(frame, (int(kalman_u), int(kalman_v)), int(radius)+4, (255, 255, 255), 2)
+                cv2.circle(frame, (int(kalman_u), int(kalman_v)), int(30)+4, (255, 255, 255), 2)
                 # print(f"Ball position: ({cx}, {cy}); Velocity (p/s): ({vx}, {vy})")
 
                 # Only send packet if it follows the Hz constraint (50 Hz)
@@ -281,7 +317,7 @@ while True:
                 print(f"Ball position: ({cx}, {cy}); Velocity (p/s): (N/A)")
                 
             # Illustrate circle on out frame
-            cv2.circle(frame, (int(u), int(v)), int(radius), (0, 255, 255),2)
+            cv2.circle(frame, (int(u), int(v)), int(40), (0, 255, 255),2)
             cv2.circle(frame, (ball_cu, ball_cv), 4, (0, 0, 255), -1)                
 
             cx_1, cy_1, vx_1, vy_1 = cx, cy, vx, vy
