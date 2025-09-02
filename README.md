@@ -104,7 +104,7 @@ pip install -r requirements.txt
 
 ## 📸 Demo
 
-*Add video/GIF here once available.*
+*Coming Soon*
 
 ---
 
