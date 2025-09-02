@@ -5,9 +5,9 @@ Servo servoY;
 
 const double S_GAIN = 1.0;
 
-const double Kp = 0.5;
+const double Kp = .5;
 const double Ki = 0.05;
-const double Kd = 0.1;
+const double Kd = 0.2;
 
 const double goal_x = 0.0;
 const double goal_y = 0.0;
@@ -29,12 +29,16 @@ unsigned long ms_1 = 0;
 double angle_x =90.0, angle_y = 90.0;
 
 // servo constraints
+const int X_US_MIN = 600;  
+const int X_US_MAX = 2400;  
+const int Y_US_MIN = 600;
+const int Y_US_MAX = 2400;
+
 const double MIN_ANG_x = 60.0; 
 const double MAX_ANG_x = 120.0;
 
 const double MIN_ANG_y = 60.0; 
 const double MAX_ANG_y = 120.0;
-
 
 void setup() {
     servoX.attach(9, 600, 2400);
@@ -64,12 +68,12 @@ void loop() {
             unsigned long now = millis();
             double dt = (now- ms_1) / 1000.0;
             if (dt >= 0.02) {
-                if (abs(x - goal_x) <= goal_window) {
-                    x = goal_x;
-                }
-                if (abs(y - goal_y) <= goal_window) {
-                    y = goal_y;
-                }
+                // if (abs(x - goal_x) <= goal_window) {
+                //     x = goal_x;
+                // }
+                // if (abs(y - goal_y) <= goal_window) {
+                //     y = goal_y;
+                // }
                 error_x = goal_x - x;
                 error_y = goal_y - y;
                 double de_x = (error_x - error_x_1) / dt;
@@ -79,11 +83,14 @@ void loop() {
                 double signal_y = (Kp * error_y) + (Kd * de_y);
 
                 // Convert to servo angle (center = 90°)
-                angle_x = constrain(90 + signal_x*S_GAIN, MIN_ANG_x, MAX_ANG_x);
-                angle_y = constrain(90 + signal_y*S_GAIN, MIN_ANG_y, MAX_ANG_y);
+                angle_x = constrain(90 - signal_x*S_GAIN, 0, 180);
+                angle_y = constrain(90 + signal_y*S_GAIN,0, 180);
 
-                servoX.write(180-angle_x);
-                servoY.write(angle_y);
+                int us_x = map(angle_x,0,180, X_US_MIN, X_US_MAX);
+                int us_y = map(angle_y,0,180, Y_US_MIN, Y_US_MAX);
+                
+                servoX.writeMicroseconds(us_x);
+                servoY.writeMicroseconds(us_y);
 
                 // update hist
                 error_x_1 = error_x;
