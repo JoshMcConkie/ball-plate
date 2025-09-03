@@ -102,9 +102,7 @@ pip install -r requirements.txt
 
 ---
 
-## 📸 Demo
-
-*Coming Soon*
+## 📸 Demo(https://photos.app.goo.gl/n6tguVm4wNqeG5kc6)
 
 ---
 
