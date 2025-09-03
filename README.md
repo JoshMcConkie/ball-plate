@@ -18,9 +18,9 @@ The system uses **AprilTags** for table calibration, **OpenCV** for ball trackin
 
 ## 📂 Repository Layout
 ```
-ball_track.py           # Python: camera, AprilTags, ball tracking, serial streaming
-controller.ino          # Arduino: PD control for servos
-XY_PID_controller.ipynb # Notebook for controller tuning experiments
+scripts/ball_track.py           # Python: camera, AprilTags, ball tracking, serial streaming
+scripts/ball_track_kalman.py    # Kalma filter implementation (in progress)
+firmware/controller.ino          # Arduino: PD control for servos
 sim/                    # Simulation experiments (in progress)
 README.md               # Project documentation
 ```
@@ -105,6 +105,9 @@ pip install -r requirements.txt
 ## 📸 Demo(https://photos.app.goo.gl/n6tguVm4wNqeG5kc6)
 
 ---
+
+## CAD Files
+(coming soon)
 
 ## 📜 License
 
