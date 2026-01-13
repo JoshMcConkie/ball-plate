@@ -38,7 +38,7 @@ def Ry(tilt):
 
 P_GLOBAL = P_T
 def table_to_global(P_table, roll, tilt, O=np.zeros((3,1))):
-    R = Ry(-tilt) @ Rx(-roll)
+    R = Ry(tilt) @ Rx(roll)
     return O + R @ P_table
 
 TILT_ANCHOR_TABLE_COORDS = np.array([[RADIUS]
@@ -122,3 +122,72 @@ print(f"E->P distance: {round(np.linalg.norm(table_to_global(ROLL_ANCHOR_TABLE_C
 
 print(f"\nPhysical Servo angles: {thetas_phys.T * 180 / np.pi} degrees.")
 print(f"\nCommanded Servo_tilt angle: {thetas_cmd.T * 180/np.pi} degrees.")
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- compute global points you care about ---
+P_roll_global = table_to_global(ROLL_ANCHOR_TABLE_COORDS, roll, tilt)
+P_tilt_global = table_to_global(TILT_ANCHOR_TABLE_COORDS, roll, tilt)
+
+E_roll_global = elbow_global(thetas_phys[0,0], ROLL_SERVO_GLOB_COORDS, ROLL_SERVO_TO_GLOBAL)
+E_tilt_global = elbow_global(thetas_phys[1,0], TILT_SERVO_GLOB_COORDS, TILT_SERVO_TO_GLOBAL)
+
+# --- helper: equal-axis scaling for 3D ---
+def set_equal_3d(ax, pts):
+    pts = np.asarray(pts, float)
+    xs, ys, zs = pts[:,0], pts[:,1], pts[:,2]
+    xmid, ymid, zmid = xs.mean(), ys.mean(), zs.mean()
+    max_range = max(np.ptp(xs), np.ptp(ys), np.ptp(zs)) / 2.0
+    if max_range == 0:
+        max_range = 1.0
+    ax.set_xlim(xmid - max_range, xmid + max_range)
+    ax.set_ylim(ymid - max_range, ymid + max_range)
+    ax.set_zlim(zmid - max_range, zmid + max_range)
+
+# --- collect points ---
+points = {
+    "Origin": ORIGIN,
+    "Roll servo S_r": ROLL_SERVO_GLOB_COORDS,
+    "Roll elbow E_r": E_roll_global,
+    "Roll anchor P_r": P_roll_global,
+    "Tilt servo S_t": TILT_SERVO_GLOB_COORDS,
+    "Tilt elbow E_t": E_tilt_global,
+    "Tilt anchor P_t": P_tilt_global,
+}
+
+# --- plot ---
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+
+for name, v in points.items():
+    x, y, z = float(v[0,0]), float(v[1,0]), float(v[2,0])
+    ax.scatter([x], [y], [z])
+    ax.text(x, y, z, name, fontsize=9)
+
+# link segments: S->E and E->P for each servo
+def seg(a, b, label=None):
+    ax.plot([a[0,0], b[0,0]], [a[1,0], b[1,0]], [a[2,0], b[2,0]], label=label)
+
+seg(ROLL_SERVO_GLOB_COORDS, E_roll_global, "Roll horn S→E")
+seg(E_roll_global, P_roll_global, "Roll rod E→P")
+seg(TILT_SERVO_GLOB_COORDS, E_tilt_global, "Tilt horn S→E")
+seg(E_tilt_global, P_tilt_global, "Tilt rod E→P")
+
+# optional: draw global axes for orientation
+axis_len = RADIUS * 0.6
+ax.plot([0, axis_len], [0, 0], [0, 0], label="+X")
+ax.plot([0, 0], [0, axis_len], [0, 0], label="+Y")
+ax.plot([0, 0], [0, 0], [0, axis_len], label="+Z")
+
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_zlabel("z")
+ax.legend()
+
+# equal scaling
+pts_xyz = np.array([[float(v[0,0]), float(v[1,0]), float(v[2,0])] for v in points.values()])
+set_equal_3d(ax, pts_xyz)
+
+plt.show()
