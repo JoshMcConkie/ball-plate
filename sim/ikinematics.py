@@ -18,17 +18,31 @@ Current config:
 
 
 RADIUS = 20     # Half width of table
-P_T = np.array([[RADIUS]
-                ,[0]
-                ,[0]])
-
-L1 = 2.5 # servo arm (servo to elbow)
-L2 = 5.5 # tie rod (elbow to anchor)
-
-# roll = 5 * np.pi / 180 # rotation about x-axis
-# tilt = -5 * np.pi / 180 # rotation about y-axis
-
+L1 = 2.5        # servo arm (servo to elbow)
+L2 = 5.5        # tie rod (elbow to anchor)
 ORIGIN = np.zeros((3,1))
+
+
+TILT_ANCHOR_TABLE_COORDS = np.array([[RADIUS],
+                                    [0],
+                                    [0]])
+TILT_SERVO_GLOB_COORDS = np.array([[RADIUS],
+                                    [L1],
+                                    [-L2]])
+TILT_SERVO_TO_GLOBAL = np.array([[0,0,1],
+                                 [1,0,0],
+                                 [0,1,0]])
+
+ROLL_ANCHOR_TABLE_COORDS = np.array([[0],
+                                     [RADIUS],
+                                     [0]])
+
+ROLL_SERVO_GLOB_COORDS = np.array([[L1],
+                                   [RADIUS],
+                                   [-L2]])
+ROLL_SERVO_TO_GLOBAL = np.array([[-1,0,0],
+                                 [0,0,1],
+                                 [0,1,0]])
 
 def Rx(roll):
     c, s = np.cos(roll), np.sin(roll)
@@ -42,31 +56,9 @@ def Ry(tilt):
                      [ 0,1, 0],
                      [-s,0, c]], float)
 
-P_GLOBAL = P_T
 def table_to_global(P_table, roll, tilt, O=np.zeros((3,1))):
     R = Ry(tilt) @ Rx(roll)
     return O + R @ P_table
-
-TILT_ANCHOR_TABLE_COORDS = np.array([[RADIUS]
-                                  ,[0]
-                                  ,[0]])
-TILT_SERVO_GLOB_COORDS = np.array([[RADIUS]
-                     ,[L1]
-                     ,[-L2]])
-TILT_SERVO_TO_GLOBAL = np.array([[0,0,1]
-                     ,[1,0,0]
-                     ,[0,1,0]])
-
-ROLL_ANCHOR_TABLE_COORDS = np.array([[0]
-                                  ,[RADIUS]
-                                  ,[0]])
-
-ROLL_SERVO_GLOB_COORDS = np.array([[L1]
-                     ,[RADIUS]
-                     ,[-L2]])
-ROLL_SERVO_TO_GLOBAL = np.array([[-1,0,0]
-                     ,[0,0,1]
-                     ,[0,1,0]])
 
 def global_to_servo(P_global, S_global, R_servo_to_global):
     R_glob_to_serv = R_servo_to_global.T
@@ -92,27 +84,23 @@ def get_servo_angles(roll, tilt): # -> upper theta, lower theta
         alpha = np.arctan2(py, px)
         r = np.hypot(px, py)
         c = k / r
-        # print("\n--- DEBUG ---")
-        # print("Px,Py,Pz =", px, py, pz)
-        # print("r =", r, "k =", k, "c=k/r =", c)
-        # print("S_global.T =", s_global.T)
-        # print("P_global.T =", p_global.T)
-        # print("P_servo.T  =", p_servo.T)
         if abs(c) > 1:
+            if DEBUG:
+                print("Px,Py,Pz =", px, py, pz)
+                print("r =", r, "k =", k, "c=k/r =", c)
+                print("S_global.T =", s_global.T)
+                print("P_global.T =", p_global.T)
+                print("P_servo.T  =", p_servo.T)
             raise ValueError(f"Unreachable geometry: |k/r| > 1 (no real IK solution)\n Roll: {roll} \n Tilt: {tilt}.")
         delta = np.arccos(c)
         theta_a = alpha + delta
         theta_b = alpha - delta
         return theta_a, theta_b
-    thetas = np.zeros((2,1),float)
     
     roll_a0, roll_b0 = _get_servo_angle(ROLL_ANCHOR_TABLE_COORDS,
                                    ROLL_SERVO_GLOB_COORDS,
                                    ROLL_SERVO_TO_GLOBAL,
                                    roll=0.0, tilt=0.0)
-    
-    
-    
     tilt_a0, tilt_b0 = _get_servo_angle(TILT_ANCHOR_TABLE_COORDS,
                                    TILT_SERVO_GLOB_COORDS,
                                    TILT_SERVO_TO_GLOBAL,
@@ -120,6 +108,7 @@ def get_servo_angles(roll, tilt): # -> upper theta, lower theta
     if DEBUG: print(f"roll a0: {roll_a0}, roll b0: {roll_b0},\ntilt a0: {tilt_a0}, tilt b0: {tilt_b0}")
     roll_ref = roll_b0
     tilt_ref = tilt_a0
+
     def choose_branch(theta_sol, theta_ref):
         # choose the one closest to theta_ref, accounting for wrapping
         theta_a = theta_sol[0]
@@ -128,6 +117,7 @@ def get_servo_angles(roll, tilt): # -> upper theta, lower theta
         db = abs(wrap_pi(theta_b - theta_ref))
         return theta_a if da < db else theta_b
     
+    thetas = np.zeros((2,1),float)
     thetas[0][0] = choose_branch(_get_servo_angle(ROLL_ANCHOR_TABLE_COORDS,
                                                   ROLL_SERVO_GLOB_COORDS,
                                                   ROLL_SERVO_TO_GLOBAL,
@@ -178,12 +168,19 @@ def q_command_rad(roll, tilt) -> NDArray[np.float64]:
    q = get_servo_angles(roll,tilt)
    return wrap_pi(q-q0)
 
-# ===== Linearization q(roll,tilt) -> q ≈ q_0 + J * Δx ======
+def q_command_deg(roll_deg, tilt_deg) -> NDArray[np.float64]:
+   roll = np.deg2rad(roll_deg)
+   tilt = np.deg2rad(tilt_deg)
+   q0 = get_servo_angles(roll=0.0, tilt=0.0)
+   q = get_servo_angles(roll,tilt)
+   return np.rad2deg(wrap_pi(q-q0))
+
+# ===== LINEARIZATION q(roll,tilt) -> q ≈ q_0 + J * Δx ======
 
 '''
 Numerical 2x2 Jacobian using central differences
 '''
-def Jacobian_level(eps=1e-4):
+def Jacobian_at_level(eps=1e-4):
    # --- ∂q/∂roll ----
    qr_right = q_command_rad(+eps,0.0)
    qr_left  = q_command_rad(-eps, 0.0)
@@ -202,26 +199,28 @@ def Jacobian_level(eps=1e-4):
 q_command_rad_lin(roll,tilt, Jacobian)
 Linearized command for angle
 '''
-def q_command_rad_lin(roll,tilt, J):
+def q_command_lin_rad(roll,tilt, J):
    return J @ np.array([[roll],[tilt]])
 
-J = Jacobian_level()
+def q_command_lin_deg(roll_deg,tilt_deg, J):
+   roll = np.deg2rad(roll_deg)
+   tilt = np.deg2rad(tilt_deg)
+   return np.rad2deg(J @ np.array([[roll],[tilt]]))
+
+J = Jacobian_at_level()
 next_roll = 0
 next_tilt = 0
 
 def get_linear_error():
     import pandas as pd
-    print("Linear q Error")
+    print("\n=====Linear q Errors====\n")
     for r_deg,t_deg in [(-5,-5),(5,-5),(5,5),(-5,5),(-2,-2),(2,-2),(2,2),(-2,2)]:
-        r_rad = np.deg2rad(r_deg)
-        t_rad = np.deg2rad(t_deg)
-        dif_rad = q_command_rad(r_rad,t_rad)- q_command_rad_lin(r_rad,t_rad,J)
-        deg_dif = np.round(np.rad2deg(dif_rad),decimals=2)
-        table = pd.DataFrame(deg_dif.T,columns=["Roll Servo °","Tilt Servo °"])
+        dif_deg = np.round(q_command_deg(r_deg,t_deg)- q_command_lin_deg(r_deg,t_deg,J),decimals=2)
+        table = pd.DataFrame(dif_deg.T,columns=["Roll Servo °","Tilt Servo °"])
         print(f"({r_deg}°,{t_deg}°):\n {table}")
 
 if DEBUG: get_linear_error();
-
+get_linear_error()
 
 '''
 import matplotlib.pyplot as plt
