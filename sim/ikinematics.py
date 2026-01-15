@@ -1,12 +1,18 @@
 import numpy as np
-
+from numpy.typing import NDArray
+DEBUG = False
 '''
 Inverse Kinematic approach. More appropriate, avoids three sphere
 intersection.
 
 Current config:
-    * only configured for one pitch servo currently
-    - roll/pitch -> servo angle
+    - ROLL_SERVO is position at the top of the y-axis, CCwise rotation 
+    raises the near side parallel to the x-axis, inducing roll.
+    The servo arm points toward the negative x-axis at rest.
+    - TILT_SERVO is position at the top of the x-axis. CCwise rotation 
+    lowers the near side parallel to the y-axis, inducing tilt.
+    The servo arm points toward the negative y-axis at rest.
+    - roll/pitch -> servo command angles [ROLL_SERVO_THETA,TILT_SERVO_THETA]
 
 '''
 
@@ -19,8 +25,8 @@ P_T = np.array([[RADIUS]
 L1 = 2.5 # servo arm (servo to elbow)
 L2 = 5.5 # tie rod (elbow to anchor)
 
-roll = 5 * np.pi / 180 # rotation about x-axis
-tilt = -5 * np.pi / 180 # rotation about y-axis
+# roll = 5 * np.pi / 180 # rotation about x-axis
+# tilt = -5 * np.pi / 180 # rotation about y-axis
 
 ORIGIN = np.zeros((3,1))
 
@@ -67,64 +73,157 @@ def global_to_servo(P_global, S_global, R_servo_to_global):
     return R_glob_to_serv @ (P_global - S_global)
 
 '''
-get_servo_angle: {Table point (T basis),roll,tilt} -> {Servo angle}
+get_servo_angle: {Table point (T basis),roll,tilt} -> {Servo physical angle}
 '''
 
 def get_servo_angles(roll, tilt): # -> upper theta, lower theta
-  def _get_servo_angle(p_table,s_global,servo_to_global):
-    p_global = table_to_global(p_table, roll, tilt)
-    # print(f"P_global = {P_global}")
+    def _get_servo_angle(p_table,s_global,servo_to_global,roll,tilt):
+        p_global = table_to_global(p_table, roll, tilt)
+        # print(f"P_global = {P_global}")
 
-    p_servo = global_to_servo(p_global, s_global, servo_to_global)
-    # print(f"P_servo = {P_servo}")
-    px = float(p_servo[0,0])
-    py = float(p_servo[1,0])
-    pz = float(p_servo[2,0])
+        p_servo = global_to_servo(p_global, s_global, servo_to_global)
+        # print(f"P_servo = {P_servo}")
+        px = float(p_servo[0,0])
+        py = float(p_servo[1,0])
+        pz = float(p_servo[2,0])
 
-    # theta = alpha +- arccos(k/sqrt(Py^2 + Px^2))
-    k = (px*px + py*py + pz*pz + L1*L1 - L2*L2) / (2*L1)
-    alpha = np.arctan2(py, px)
-    r = np.hypot(px, py)
-    c = k / r
-    # print("\n--- DEBUG ---")
-    # print("Px,Py,Pz =", px, py, pz)
-    # print("r =", r, "k =", k, "c=k/r =", c)
-    # print("S_global.T =", s_global.T)
-    # print("P_global.T =", p_global.T)
-    # print("P_servo.T  =", p_servo.T)
-    if abs(c) > 1:
-      raise ValueError("Unreachable geometry: |k/r| > 1 (no real IK solution).")
-    delta = np.arccos(c)
-    theta_a = alpha + delta
-    theta_b = alpha - delta
-    return theta_a, theta_b
-  thetas = np.zeros((2,1),float)
-  i = 1
-  thetas[0][0] = _get_servo_angle(ROLL_ANCHOR_TABLE_COORDS,ROLL_SERVO_GLOB_COORDS,ROLL_SERVO_TO_GLOBAL)[1]
-  thetas[1][0] = _get_servo_angle(TILT_ANCHOR_TABLE_COORDS,TILT_SERVO_GLOB_COORDS,TILT_SERVO_TO_GLOBAL)[0]
-  return thetas
+        # theta = alpha +- arccos(k/sqrt(Py^2 + Px^2))
+        k = (px*px + py*py + pz*pz + L1*L1 - L2*L2) / (2*L1)
+        alpha = np.arctan2(py, px)
+        r = np.hypot(px, py)
+        c = k / r
+        # print("\n--- DEBUG ---")
+        # print("Px,Py,Pz =", px, py, pz)
+        # print("r =", r, "k =", k, "c=k/r =", c)
+        # print("S_global.T =", s_global.T)
+        # print("P_global.T =", p_global.T)
+        # print("P_servo.T  =", p_servo.T)
+        if abs(c) > 1:
+            raise ValueError(f"Unreachable geometry: |k/r| > 1 (no real IK solution)\n Roll: {roll} \n Tilt: {tilt}.")
+        delta = np.arccos(c)
+        theta_a = alpha + delta
+        theta_b = alpha - delta
+        return theta_a, theta_b
+    thetas = np.zeros((2,1),float)
+    
+    roll_a0, roll_b0 = _get_servo_angle(ROLL_ANCHOR_TABLE_COORDS,
+                                   ROLL_SERVO_GLOB_COORDS,
+                                   ROLL_SERVO_TO_GLOBAL,
+                                   roll=0.0, tilt=0.0)
+    
+    
+    
+    tilt_a0, tilt_b0 = _get_servo_angle(TILT_ANCHOR_TABLE_COORDS,
+                                   TILT_SERVO_GLOB_COORDS,
+                                   TILT_SERVO_TO_GLOBAL,
+                                   roll=0.0, tilt=0.0)
+    if DEBUG: print(f"roll a0: {roll_a0}, roll b0: {roll_b0},\ntilt a0: {tilt_a0}, tilt b0: {tilt_b0}")
+    roll_ref = roll_b0
+    tilt_ref = tilt_a0
+    def choose_branch(theta_sol, theta_ref):
+        # choose the one closest to theta_ref, accounting for wrapping
+        theta_a = theta_sol[0]
+        theta_b = theta_sol[1]
+        da = abs(wrap_pi(theta_a - theta_ref))
+        db = abs(wrap_pi(theta_b - theta_ref))
+        return theta_a if da < db else theta_b
+    
+    thetas[0][0] = choose_branch(_get_servo_angle(ROLL_ANCHOR_TABLE_COORDS,
+                                                  ROLL_SERVO_GLOB_COORDS,
+                                                  ROLL_SERVO_TO_GLOBAL,
+                                                  roll=roll,tilt=tilt),
+                                                  roll_ref)
+    thetas[1][0] = choose_branch(_get_servo_angle(TILT_ANCHOR_TABLE_COORDS
+                                                  ,TILT_SERVO_GLOB_COORDS
+                                                  ,TILT_SERVO_TO_GLOBAL
+                                                  ,roll=roll,tilt=tilt)
+                                                  ,tilt_ref)
+    return thetas
+
+# Debugging
+if DEBUG:
+    thetas_offset = get_servo_angles(roll=0.0, tilt=0.0)
+    roll_debug = 3
+    tilt_debug = 3
+    thetas_phys = get_servo_angles(roll_debug, tilt_debug)
+    thetas_cmd = thetas_phys - thetas_offset        # so level becomes 0
+    # print(f"theta_cmd = {theta_cmd}")
+
+    def elbow_global(theta, S_global, R_servo_to_global):
+        E_servo = np.array([[L1*np.cos(theta)],
+                            [L1*np.sin(theta)],
+                            [0.0]])
+        return S_global + R_servo_to_global @ E_servo
+
+    roll_elbow_global_coords = elbow_global(thetas_phys[0][0],ROLL_SERVO_GLOB_COORDS,ROLL_SERVO_TO_GLOBAL)
+    print(f"S->E distance: {np.linalg.norm(roll_elbow_global_coords[:3] - ROLL_SERVO_GLOB_COORDS)}")
+    print(f"E->P distance: {round(np.linalg.norm(table_to_global(ROLL_ANCHOR_TABLE_COORDS, roll_debug, tilt_debug) - roll_elbow_global_coords[:3]),1)}")
+
+    print(f"\nPhysical Servo angles: {thetas_phys.T * 180 / np.pi} degrees.")
+    print(f"\nCommanded Servo_tilt angle: {thetas_cmd.T * 180/np.pi} degrees.")
 
 
-thetas_offset = get_servo_angles(roll=0.0, tilt=0.0)
-thetas_phys = get_servo_angles(roll, tilt)
-thetas_cmd = thetas_phys - thetas_offset        # so level becomes 0
-# print(f"theta_cmd = {theta_cmd}")
+'''
+Constrains angles to (-π,π)
+(-π, π) -> (0,2π) -> mod (2π) -> (-π,π)
+'''
+def wrap_pi(rad_angle):
+   return (rad_angle + np.pi) % (2*np.pi) - np.pi
 
-def elbow_global(theta, S_global, R_servo_to_global):
-    E_servo = np.array([[L1*np.cos(theta)],
-                        [L1*np.sin(theta)],
-                        [0.0]])
-    return S_global + R_servo_to_global @ E_servo
+'''
+q_command(roll,tilt): Converts objective servo angles to relative command angles
+'''
+def q_command_rad(roll, tilt) -> NDArray[np.float64]:
+   q0 = get_servo_angles(roll=0.0, tilt=0.0)
+   q = get_servo_angles(roll,tilt)
+   return wrap_pi(q-q0)
 
-roll_elbow_global_coords = elbow_global(thetas_phys[0][0],ROLL_SERVO_GLOB_COORDS,ROLL_SERVO_TO_GLOBAL)
-print(f"S->E distance: {np.linalg.norm(roll_elbow_global_coords[:3] - ROLL_SERVO_GLOB_COORDS)}")
-print(f"E->P distance: {round(np.linalg.norm(table_to_global(ROLL_ANCHOR_TABLE_COORDS, roll, tilt) - roll_elbow_global_coords[:3]),1)}")
+# ===== Linearization q(roll,tilt) -> q ≈ q_0 + J * Δx ======
 
-print(f"\nPhysical Servo angles: {thetas_phys.T * 180 / np.pi} degrees.")
-print(f"\nCommanded Servo_tilt angle: {thetas_cmd.T * 180/np.pi} degrees.")
+'''
+Numerical 2x2 Jacobian using central differences
+'''
+def Jacobian_level(eps=1e-4):
+   # --- ∂q/∂roll ----
+   qr_right = q_command_rad(+eps,0.0)
+   qr_left  = q_command_rad(-eps, 0.0)
+   dq_droll = (qr_right-qr_left) / (2 * eps)
+
+   # --- ∂q/∂tilt ----
+   qt_right = q_command_rad(0.0, +eps)
+   qt_left = q_command_rad(0.0, -eps)
+   dq_dtilt = (qt_right - qt_left) / (2 * eps)
+
+   J = np.hstack([dq_droll,dq_dtilt])
+
+   return J
+
+'''
+q_command_rad_lin(roll,tilt, Jacobian)
+Linearized command for angle
+'''
+def q_command_rad_lin(roll,tilt, J):
+   return J @ np.array([[roll],[tilt]])
+
+J = Jacobian_level()
+next_roll = 0
+next_tilt = 0
+
+def get_linear_error():
+    import pandas as pd
+    print("Linear q Error")
+    for r_deg,t_deg in [(-5,-5),(5,-5),(5,5),(-5,5),(-2,-2),(2,-2),(2,2),(-2,2)]:
+        r_rad = np.deg2rad(r_deg)
+        t_rad = np.deg2rad(t_deg)
+        dif_rad = q_command_rad(r_rad,t_rad)- q_command_rad_lin(r_rad,t_rad,J)
+        deg_dif = np.round(np.rad2deg(dif_rad),decimals=2)
+        table = pd.DataFrame(deg_dif.T,columns=["Roll Servo °","Tilt Servo °"])
+        print(f"({r_deg}°,{t_deg}°):\n {table}")
+
+if DEBUG: get_linear_error();
 
 
-import numpy as np
+'''
 import matplotlib.pyplot as plt
 
 # --- compute global points you care about ---
@@ -191,3 +290,4 @@ pts_xyz = np.array([[float(v[0,0]), float(v[1,0]), float(v[2,0])] for v in point
 set_equal_3d(ax, pts_xyz)
 
 plt.show()
+'''
