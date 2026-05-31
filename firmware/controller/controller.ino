@@ -1,51 +1,38 @@
-#include <Servo.h>
+#include <ESP32Servo.h>
 
-Servo servoX;
-Servo servoY;
+constexpr SERVOX_PIN = 32
+constexpr SERVOY_PIN = 33
 
-const double S_GAIN = 1.0;
+Servo servoX; // changes x acc of ball
+Servo servoY; // changes y acc of ball
 
-const double Kp = .5;
-const double Ki = 0.05;
-const double Kd = 0.2;
+// servo constraints
+constexpr int SERVOX_US_MIN = 800, SERVOY_US_MIN = 800;
+constexpr int SERVOX_US_MAX = 2200, SERVOY_US_MAX = 2200;
 
-const double goal_x = 0.0;
-const double goal_y = 0.0;
+constexpr double SERVOX_DEG_MIN = 60.0, SERVOY_DEG_MIN = 60.0;
+constexpr double SERVOX_DEG_MAX = 120.0, SERVOY_DEG_MAX = 120.0;
 
-const double goal_window = 10;
+// Servo commands
+double servox_cmd = 90.0, servoy_cmd = 90.0;
 
-// State
-int vx=0, vy=0;
-int x=0, y=0;
+// IMU state
+double roll = 0, pitch = 0;
+
+
+
+// Serial read var
 String line;
-
-double error_x = 0.0, error_y = 0.0;
-double error_x_1 = 0.0, error_y_1 = 0.0;
 
 // timing
 unsigned long ms_1 = 0;
 
-// Servo outs
-double angle_x =90.0, angle_y = 90.0;
-
-// servo constraints
-const int X_US_MIN = 600;  
-const int X_US_MAX = 2400;  
-const int Y_US_MIN = 600;
-const int Y_US_MAX = 2400;
-
-const double MIN_ANG_x = 60.0; 
-const double MAX_ANG_x = 120.0;
-
-const double MIN_ANG_y = 60.0; 
-const double MAX_ANG_y = 120.0;
-
 void setup() {
-    servoX.attach(9, 600, 2400);
-    servoY.attach(10, 600, 2400);
+    servoX.attach(SERVOX_PIN, SERVOX_US_MIN, SERVOX_US_MAX);
+    servoY.attach(SERVOY_PIN, SERVOY_US_MIN, SERVOY_US_MAX);
     Serial.begin(115200);
-    servoX.write(angle_x);
-    servoY.write(angle_y);
+    servoX.write(servox_cmd);
+    servoY.write(servoy_cmd);
     delay(1000);
 }
 
@@ -54,49 +41,54 @@ void loop() {
         line = Serial.readStringUntil('\n');  // read one packet (line)
         line.trim();
 
-        if (sscanf(line.c_str(), "%d,%d,%d,%d", &x, &y, &vx, &vy) == 4) {
+        if (sscanf(line.c_str(), "%d,%d", &servox_cmd, &servoy_cmd,) == 2) {
             Serial.print("OK,");
-            Serial.print(x); Serial.print(',');
-            Serial.print(y); Serial.print(',');
-            Serial.print(vx); Serial.print(',');
-            Serial.println(vy);
-            // Successfully parsed all 4 ints
-            // Serial.print("X="); Serial.print(x);
-            // Serial.print(" Y="); Serial.print(y);
-            // Serial.print(" VX="); Serial.print(vx);
-            // Serial.print(" VY="); Serial.println(vy);
-            unsigned long now = millis();
-            double dt = (now- ms_1) / 1000.0;
-            if (dt >= 0.02) {
-                // if (abs(x - goal_x) <= goal_window) {
-                //     x = goal_x;
-                // }
-                // if (abs(y - goal_y) <= goal_window) {
-                //     y = goal_y;
-                // }
-                error_x = goal_x - x;
-                error_y = goal_y - y;
-                double de_x = (error_x - error_x_1) / dt;
-                double de_y = (error_y - error_y_1) / dt;
+            Serial.print(servox_cmd); Serial.print(',');
+            Serial.println(servoy_cmd);
 
-                double signal_x = (Kp * error_x) + (Kd * de_x);
-                double signal_y = (Kp * error_y) + (Kd * de_y);
+            servox_cmd = constrain(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX);
+            servoy_cmd = constrain(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX);
 
-                // Convert to servo angle (center = 90°)
-                angle_x = constrain(90 - signal_x*S_GAIN, 0, 180);
-                angle_y = constrain(90 + signal_y*S_GAIN,0, 180);
+            int us_x = map(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX, SERVOX_US_MIN, SERVOX_US_MAX);
+            int us_y = map(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX, SERVOY_US_MIN, SERVOY_US_MAX);
+            
+            servoX.writeMicroseconds(us_x);
+            servoY.writeMicroseconds(us_y);
 
-                int us_x = map(angle_x,0,180, X_US_MIN, X_US_MAX);
-                int us_y = map(angle_y,0,180, Y_US_MIN, Y_US_MAX);
+            Serial.print()
+            
+            // unsigned long now = millis();
+            // double dt = (now- ms_1) / 1000.0;
+            // if (dt >= 0.02) {
+            //     // if (abs(x - goal_x) <= goal_window) {
+            //     //     x = goal_x;
+            //     // }
+            //     // if (abs(y - goal_y) <= goal_window) {
+            //     //     y = goal_y;
+            //     // }
+            //     error_x = goal_x - x;
+            //     error_y = goal_y - y;
+            //     double de_x = (error_x - error_x_1) / dt;
+            //     double de_y = (error_y - error_y_1) / dt;
+
+            //     double signal_x = (Kp * error_x) + (Kd * de_x);
+            //     double signal_y = (Kp * error_y) + (Kd * de_y);
+
+            //     // Convert to servo angle (center = 90°)
+            //     angle_x = constrain(90 - signal_x*S_GAIN, 0, 180);
+            //     angle_y = constrain(90 + signal_y*S_GAIN,0, 180);
+
+            //     int us_x = map(angle_x,0,180, X_US_MIN, X_US_MAX);
+            //     int us_y = map(angle_y,0,180, Y_US_MIN, Y_US_MAX);
                 
-                servoX.writeMicroseconds(us_x);
-                servoY.writeMicroseconds(us_y);
+            //     servoX.writeMicroseconds(us_x);
+            //     servoY.writeMicroseconds(us_y);
 
-                // update hist
-                error_x_1 = error_x;
-                error_y_1 = error_y;
-                ms_1 = now;
-            }
+            //     // update hist
+            //     error_x_1 = error_x;
+            //     error_y_1 = error_y;
+            //     ms_1 = now;
+            // }
         } else {
             Serial.print("BAD,"); Serial.println(line);  // helps debug malformed packets
         }
