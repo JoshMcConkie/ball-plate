@@ -1,8 +1,9 @@
 import time
-
+import serial
 import cv2
+from math import atan2, sqrt, pi
 
-from ball_plate import perception, cam_tools
+from ball_plate import perception, planning, control, cam_tools
 
 import subprocess
 
@@ -11,6 +12,25 @@ UP    = 65362
 DOWN  = 65364
 LEFT  = 65361
 RIGHT = 65363
+
+# Update Control Frequency
+HERTZ = 50.0
+
+SERIAL_ON = True
+
+if SERIAL_ON:
+    '''Time constraints'''
+    last_send = 0.0 # Initialize
+    SEND_INTERVAL = 1.0/HERTZ # aka 50 Hz
+
+
+    '''Serial'''
+    ser = serial.Serial('COM3', 115200, timeout=1)
+    time.sleep(2)
+    banner = ser.readline().decode(errors='ignore').strip()
+    print("Banner:", banner)
+
+
 
 feed = perception.init_camera()
 
@@ -60,21 +80,39 @@ cv2.destroyAllWindows()
 # ---Main loop---
 filt_init_frame = perception.filter_frame(frame0)
 while True:
+    # ==Perception==
+    # Read IMU
+    
+    # Process Camera Feed
+
+    # State Estimate
+
+    # ==Planning==
+
+    #==Control==
+    # Send command to ESP32
+
+    # Log
+    
     ret, frame = feed.read()
     if not ret:
         break
     
-    # ==Perception==
+    
     mask = perception.get_mask(filt_init_frame, frame, diff_threshold=50)
     x,y = perception.get_pos(mask)
     roll, pitch = 
 
-    # ==Planning==
-
+    
+    servox_deg, servoy_deg = 0,0
     # pos_to_angles(cmd_pos)
 
-    #==Control==
     
+    recieve = control.send_recieve(servox_deg,servoy_deg, ser)
+    if recieve is not None and len(recieve) == 6:
+        ax,ay,az,gx,gy,gx = map(float,recieve)
+        roll_deg_acc  = atan2(ay, az) * 180.0 / pi
+        pitch_deg_acc = atan2(-ax, sqrt(ay*ay + az*az)) * 180.0 / pi
 
 
     cv2.imshow("Webcam Feed", mask)
