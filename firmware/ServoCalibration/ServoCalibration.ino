@@ -1,15 +1,15 @@
-#include <Servo.h>
+#include <ESP32Servo.h>
 Servo s1, s2;
 
-const int P1 = 9, P2 = 10;
+const int P1 = 32, P2 = 33;
 int active = 1;                 // 1 or 2: which servo you're moving
 int stepUs = 200;                 // jog size (µs)
 int us1 = 1500, us2 = 1500;     // current commands
 int min1 = 1500, max1 = 1500;   // discovered bounds
 int min2 = 1500, max2 = 1500;
 
-int CLAMP_MIN = 850;           // start conservative
-int CLAMP_MAX = 2100;           // widen later only if safe
+int CLAMP_MIN = 800;           // start conservative
+int CLAMP_MAX = 2200;           // widen later only if safe
 
 void writeCmds() {
   s1.writeMicroseconds(constrain(us1, CLAMP_MIN, CLAMP_MAX));
