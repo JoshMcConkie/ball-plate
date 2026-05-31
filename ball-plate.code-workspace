@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"name": "ball-plate",
+			"path": "."
+		},
+		{
+			"name": "esp32dev",
+			"path": "firmware/260530-200235-esp32dev"
+		}
+	],
+	"settings": {
+		"platformio-ide.projectsDir": "/home/josh/code/ball-plate/firmware"
+	}
+}
