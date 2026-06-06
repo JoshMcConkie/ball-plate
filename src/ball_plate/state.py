@@ -51,8 +51,7 @@ class SystemState:
     timestamp: float
     ball: BallState
     table: TableState
-    goal_x: float
-    goal_y: float
+    ref_state: ReferenceState
 
 @dataclass
 class ReferenceState:
@@ -65,5 +64,10 @@ class ControlCommand:
     timestamp: float
     roll_deg: float
     pitch_deg: float
+    servox_deg: float
+    servoy_deg: float
+
+    def get_cmd_str(self):
+        return f"{int(self.servox_deg)}, {int(self.servoy_deg)}\n"
 
 
