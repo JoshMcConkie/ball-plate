@@ -1,5 +1,4 @@
 from ball_plate.state import *
-from serial import Serial
 
 KP = 1.0
 KI = 0.0
@@ -11,19 +10,6 @@ _integral_x = 0.0
 _integral_y = 0.0
 _last_timestamp = None
 
-
-def send_recieve(servox_deg: float, servoy_deg: float, ser: Serial, ):
-    # build a packet
-    packet = f"{int(servox_deg)},{int(servoy_deg)}\n" #
-    try: # send/recieve from esp32 through serial
-        ser.write(packet.encode('utf-8'))
-        print(packet)
-        echo = ser.readline().decode(errors='ignore').strip()
-        print("Echo:", echo)
-    except Exception as e:
-        print("Serial write/read failed: ", e)
-        return None
-    return echo.split()
 
 def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
     global _integral_x, _integral_y, _last_timestamp
@@ -64,3 +50,7 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
         roll_deg = -MAX_TILT_DEG
 
     return ControlCommand(system.timestamp, roll_deg, pitch_deg)
+
+def get_system_state(ball_state: BallState, table_state: TableState, ref_state: ReferenceState)->SystemState:
+    timestamp = max(ball_state.timestamp,table_state.timestamp)
+    return SystemState(timestamp, ball_state,table_state,ref_state)
