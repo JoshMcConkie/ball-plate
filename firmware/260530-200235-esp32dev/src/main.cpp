@@ -64,9 +64,9 @@ void loop() {
         line.trim();
 
         if (sscanf(line.c_str(), "%lf,%lf", &servox_cmd, &servoy_cmd) == 2) {
-            Serial.print("OK,");
-            Serial.print(servox_cmd); Serial.print(',');
-            Serial.println(servoy_cmd);
+            // Serial.print("OK,");
+            // Serial.print(servox_cmd); Serial.print(',');
+            // Serial.println(servoy_cmd);
 
             servox_cmd = constrain(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX);
             servoy_cmd = constrain(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX);
@@ -80,7 +80,7 @@ void loop() {
             
             
         } else {
-            Serial.print("BAD,"); Serial.println(line);  // helps debug malformed packets
+            // Serial.print("BAD,"); Serial.println(line);  // helps debug malformed packets
         }
     }
 
