@@ -1,3 +1,5 @@
+from math import sin, asin, radians, degrees
+from ball_plate.config import SERVO_ARM_LENGTH, TABLE_H_M, TABLE_W_M
 from ball_plate.state import *
 
 KP = 1.0
@@ -9,6 +11,15 @@ MAX_INTEGRAL = 100.0
 _integral_x = 0.0
 _integral_y = 0.0
 _last_timestamp = None
+
+def get_servo_angles(roll_deg: float, pitch_deg: float)->tuple[float,float]:
+    # Edge lift needed for tilt = (table/2)*sin(tilt); servo arm rotates by asin(lift/arm)
+    arg_x = (TABLE_W_M/(2*SERVO_ARM_LENGTH)) * sin(radians(pitch_deg))
+    arg_y = (TABLE_H_M/(2*SERVO_ARM_LENGTH)) * sin(radians(roll_deg))
+    # Clamp to asin domain in case the requested tilt exceeds the arm's reach
+    servox_deg = degrees(asin(max(-1.0, min(1.0, arg_x))))
+    servoy_deg = degrees(asin(max(-1.0, min(1.0, arg_y))))
+    return servox_deg, servoy_deg
 
 
 def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
@@ -49,7 +60,9 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
     elif roll_deg < -MAX_TILT_DEG:
         roll_deg = -MAX_TILT_DEG
 
-    return ControlCommand(system.timestamp, roll_deg, pitch_deg)
+    servox_deg, servoy_deg = get_servo_angles(roll_deg, pitch_deg)
+
+    return ControlCommand(system.timestamp, roll_deg, pitch_deg, servox_deg, servoy_deg)
 
 def get_system_state(ball_state: BallState, table_state: TableState, ref_state: ReferenceState)->SystemState:
     timestamp = max(ball_state.timestamp,table_state.timestamp)

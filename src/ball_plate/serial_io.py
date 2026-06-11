@@ -19,6 +19,8 @@ def send_packet(control_cmd: ControlCommand, ser: Serial)->bool:
 def fetch_packet(ser: Serial)->IMUReading:
     try: # send/recieve from esp32 through serial
         echo = ser.readline().decode(errors="ignore").strip()
+        if not echo:
+            return None # no complete line available yet, not an error
         values = list(map(float, echo.split()))
 
         if len(values) != 6:
