@@ -1,10 +1,12 @@
 from math import sin, asin, radians, degrees
-from ball_plate.config import SERVO_ARM_LENGTH, TABLE_H_M, TABLE_W_M
+from ball_plate.config import SERVO_ARM_LENGTH, SERVO_CENTER_DEG, TABLE_H_M, TABLE_W_M
 from ball_plate.state import *
 
-KP = 1.0
+# Errors are in meters (table is ~0.22 m wide, so |error| <= ~0.11 m).
+# Gains must be large enough to turn cm-scale errors into degrees of tilt.
+KP = 80.0
 KI = 0.0
-KD = 0.2
+KD = 20.0
 MAX_TILT_DEG = 10.0
 MAX_INTEGRAL = 100.0
 
@@ -16,9 +18,11 @@ def get_servo_angles(roll_deg: float, pitch_deg: float)->tuple[float,float]:
     # Edge lift needed for tilt = (table/2)*sin(tilt); servo arm rotates by asin(lift/arm)
     arg_x = (TABLE_W_M/(2*SERVO_ARM_LENGTH)) * sin(radians(pitch_deg))
     arg_y = (TABLE_H_M/(2*SERVO_ARM_LENGTH)) * sin(radians(roll_deg))
-    # Clamp to asin domain in case the requested tilt exceeds the arm's reach
-    servox_deg = degrees(asin(max(-1.0, min(1.0, arg_x))))
-    servoy_deg = degrees(asin(max(-1.0, min(1.0, arg_y))))
+    # Clamp to asin domain in case the requested tilt exceeds the arm's reach.
+    # asin(...) is the servo deflection from flat; offset by the firmware
+    # neutral (90 deg) so a balanced plate commands flat instead of an extreme.
+    servox_deg = SERVO_CENTER_DEG + degrees(asin(max(-1.0, min(1.0, arg_x))))
+    servoy_deg = SERVO_CENTER_DEG + degrees(asin(max(-1.0, min(1.0, arg_y))))
     return servox_deg, servoy_deg
 
 
@@ -48,8 +52,10 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
         _integral_y = -MAX_INTEGRAL
 
     # TODO: fix the vx and vy to v_error_x and v_error_y
-    pitch_deg = KP * error_x + KI * _integral_x - KD * system.ball.vx
-    roll_deg = KP * error_y + KI * _integral_y - KD * system.ball.vy
+    # Negated so the commanded tilt drives the ball back toward the goal given
+    # the physical servo/plate orientation.
+    pitch_deg = -(KP * error_x + KI * _integral_x - KD * system.ball.vx)
+    roll_deg = -(KP * error_y + KI * _integral_y - KD * system.ball.vy)
 
     if pitch_deg > MAX_TILT_DEG:
         pitch_deg = MAX_TILT_DEG

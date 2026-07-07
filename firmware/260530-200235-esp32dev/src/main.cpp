@@ -71,8 +71,10 @@ void loop() {
             servox_cmd = constrain(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX);
             servoy_cmd = constrain(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX);
 
-            int us_x = map(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX, SERVOX_US_MIN, SERVOX_US_MAX);
-            int us_y = map(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX, SERVOY_US_MIN, SERVOY_US_MAX);
+            // Map on the full 0-180 deg scale so a degree command maps to its
+            // true position (90 deg -> center). The constrain above limits travel.
+            int us_x = map(servox_cmd, 0.0, 180.0, SERVOX_US_MIN, SERVOX_US_MAX);
+            int us_y = map(servoy_cmd, 0.0, 180.0, SERVOY_US_MIN, SERVOY_US_MAX);
             
             servoX.writeMicroseconds(us_x);
             servoY.writeMicroseconds(us_y);

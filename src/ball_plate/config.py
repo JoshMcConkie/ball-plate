@@ -1,4 +1,4 @@
-from ball_plate.state import ReferenceState, TableState
+from ball_plate.state import ReferenceState
 
 BAUD_RATE = 115200
 SERIAL_PORT = '/dev/ttyUSB0'
@@ -13,9 +13,10 @@ CONTROL_HZ = 50
 SERIAL_HZ = 50
 DEBUG_HZ = 2
 
-COLOR_BALL = (0, 0, 255)
+COLOR_BALL = (0, 160, 255)
 
 TABLE_W_M = 0.22  # table width in meters (x)
 TABLE_H_M = 0.22  # table height in meters (y)
 
 SERVO_ARM_LENGTH = 0.023  # servo arm length in meters
+SERVO_CENTER_DEG = 90.0   # servo angle that holds the plate flat (firmware neutral)
