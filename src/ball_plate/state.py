@@ -68,6 +68,6 @@ class ControlCommand:
     servoy_deg: float
 
     def get_cmd_str(self):
-        return f"{int(self.servox_deg)}, {int(self.servoy_deg)}\n"
+        return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n"
 
 
