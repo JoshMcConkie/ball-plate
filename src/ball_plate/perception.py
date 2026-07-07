@@ -1,4 +1,3 @@
-import subprocess
 import time
 import numpy as np
 import cv2
@@ -42,7 +41,7 @@ def init_camera():
     frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
     return cam
 
-# TODO: Change mask to color filtered for colored ball.
+''' Gray scale mask
 def filter_frame(frame: MatLike)-> MatLike:
     gray = cvtColor(frame, COLOR_BGR2GRAY)
     return GaussianBlur(gray, (5,5),sigmaX=0)
@@ -59,7 +58,7 @@ def get_mask_grayscale(init_frame: MatLike, new_frame: MatLike,
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     return mask
-
+'''
 def get_mask_color(color: tuple[int,int,int], frame: MatLike)-> MatLike:
     hsv = cvtColor(frame, COLOR_BGR2HSV)
     lower = np.array([color[0] - 10, color[1] - 100, color[2] - 100])
@@ -83,8 +82,9 @@ def get_ball_px_coords(mask: MatLike)->tuple[int,int,int]:
     return None,None,None
 
 def get_ball_table_coords(x_px: int, y_px: int)->tuple[float,float]:
+    # Image rows increase downward, so negate to make +y point up.
     x = (x_px - ORIGIN_PX[0]) * PX_TO_M_X
-    y = (y_px - ORIGIN_PX[1]) * PX_TO_M_Y
+    y = (ORIGIN_PX[1] - y_px) * PX_TO_M_Y
     return x,y
 
 def get_ball_measurement(frame: MatLike)->BallMeasurement:
@@ -92,9 +92,9 @@ def get_ball_measurement(frame: MatLike)->BallMeasurement:
     now = time.time()
     mask = get_mask_color(COLOR_BALL, frame)
     x_px, y_px, radius_px = get_ball_px_coords(mask)
-    x_m, y_m = get_ball_table_coords(x_px, y_px)
     found = x_px is not None and y_px is not None
-    confidence = radius_px / 100.0 if found else 0.0
     if not found:
         return BallMeasurement(now,0,0,0,0,0,False,0.0) # return dummy measurement
+    x_m, y_m = get_ball_table_coords(x_px, y_px)
+    confidence = radius_px / 100.0
     return BallMeasurement(now,x_px,y_px,x_m,y_m,radius_px,True,confidence) # return actual measurement
