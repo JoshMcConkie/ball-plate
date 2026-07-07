@@ -2,14 +2,12 @@ import time
 import serial
 import cv2
 import numpy as np
-from math import atan2, sqrt, pi
 
-from ball_plate import perception, planning, control, cam_tools, serial_io
+from ball_plate import perception, control, cam_tools, serial_io
 from ball_plate import estimator
 from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT, STATE_EST_HZ
 
-import subprocess
-from ball_plate.state import IMUReading, SystemState, TableState, BallMeasurement, BallState
+from ball_plate.state import TableState, BallState
 
 # Linux wait key codes
 UP    = 65362
@@ -21,7 +19,8 @@ SERIAL_ON = True
 
 if SERIAL_ON:
     '''Serial'''
-    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=.001)
+    ser = serial_io.open_serial(SERIAL_PORT, BAUD_RATE, timeout=.001)
+    print("Serial connected on:", ser.port)
     time.sleep(2)
     banner = ser.readline().decode(errors='ignore').strip()
     print("Banner:", banner)
@@ -140,7 +139,9 @@ while True:
         ball_meas = perception.get_ball_measurement(frame)
 
     # ==State Estimate==
-    if (time.time() - table_state.timestamp) > 1/STATE_EST_HZ:
+    # Only update from a fresh, valid (ball found) measurement; otherwise hold
+    # the last known ball state so a lost ball doesn't snap to table center.
+    if ball_meas.found and (time.time() - table_state.timestamp) > 1/STATE_EST_HZ:
         ball_state = estimator.get_ball_state(ball_state, ball_meas)
 
     # ==Control==
@@ -152,12 +153,14 @@ while True:
 
     # ==Logging==
     if (time.time() - log_timestamp) > 1/DEBUG_HZ:
-        log_timestamp = time.time()
-        print(f"Timestamp: {log_timestamp}\n", 
-            f"Ball State: {ball_state}\n",
-            f"Table State: {table_state}\n", 
-            f"Reference State: {REFERENCE_STATE}\n",
-            f"Control Command: {control_cmd}\n")
-
+        # log_timestamp = time.time()
+        # print(f"Timestamp: {log_timestamp}\n", 
+        #     f"Ball State: {ball_state}\n",
+        #     f"Table State: {table_state}\n", 
+        #     f"Reference State: {REFERENCE_STATE}\n",
+        #     f"Control Command: {control_cmd}\n")
+        cv2.imshow("Ball Position", frame)
+        print(f"Ball Position: {ball_state.x}, {ball_state.y}")
+        cv2.waitKey(1)
 feed.release()
 cv2.destroyAllWindows()
