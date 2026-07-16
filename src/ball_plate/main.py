@@ -5,7 +5,7 @@ import numpy as np
 
 from ball_plate import perception, control, cam_tools, serial_io
 from ball_plate import estimator
-from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT, STATE_EST_HZ
+from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
 from ball_plate.state import TableState, BallState
 
@@ -121,11 +121,17 @@ ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0
 system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
 log_timestamp = time.time()
+last_imu_poll = time.monotonic()
+last_control = time.monotonic()
+frame = init_frame
 
 while True:
+    now = time.monotonic()
+
     # ==Perception==
     # Read IMU
-    if (time.time() - imu_data.timestamp) > 1/IMU_HZ:
+    if now - last_imu_poll >= 1/IMU_HZ:
+        last_imu_poll = now
         new_imu = serial_io.fetch_packet(ser)
         if new_imu is not None:
             imu_data = new_imu
@@ -141,11 +147,12 @@ while True:
     # ==State Estimate==
     # Only update from a fresh, valid (ball found) measurement; otherwise hold
     # the last known ball state so a lost ball doesn't snap to table center.
-    if ball_meas.found and (time.time() - table_state.timestamp) > 1/STATE_EST_HZ:
+    if ball_meas.found and ball_meas.timestamp > ball_state.timestamp:
         ball_state = estimator.get_ball_state(ball_state, ball_meas)
 
     # ==Control==
-    if (time.time() - imu_data.timestamp) > 1/CONTROL_HZ:
+    if now - last_control >= 1/CONTROL_HZ:
+        last_control = now
         system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
         control_cmd = control.get_command(system_state, REFERENCE_STATE)
         
@@ -153,14 +160,19 @@ while True:
 
     # ==Logging==
     if (time.time() - log_timestamp) > 1/DEBUG_HZ:
-        # log_timestamp = time.time()
+        log_timestamp = time.time()
         # print(f"Timestamp: {log_timestamp}\n", 
         #     f"Ball State: {ball_state}\n",
         #     f"Table State: {table_state}\n", 
         #     f"Reference State: {REFERENCE_STATE}\n",
         #     f"Control Command: {control_cmd}\n")
+        cv2.circle(frame, (ball_meas.x_px,ball_meas.y_px),
+                   5, (0, 255, 0), 1)
         cv2.imshow("Ball Position", frame)
-        print(f"Ball Position: {ball_state.x}, {ball_state.y}")
-        cv2.waitKey(1)
+        print(f"Ball Position: {ball_state.x}, {ball_state.y} | "
+              f"Servo Command: {control_cmd.servox_deg:.2f}, "
+              f"{control_cmd.servoy_deg:.2f}")
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 feed.release()
 cv2.destroyAllWindows()
