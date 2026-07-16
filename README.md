@@ -6,7 +6,7 @@ A ball-on-plate balancing testbed: a camera tracks a ball on a tilting table, a 
 
 
 
-[▶ Demo gif: working build](working_build_v2.gif)
+![▶ Demo gif: working build](working_build_v2.gif)
 
 ## System architecture
 
