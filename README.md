@@ -107,7 +107,7 @@ SystemState     → controller → ControlCommand
 ```
 src/ball_plate/     # host: perception, estimator, control, serial I/O, config
 firmware/           # ESP32 PlatformIO project + calibration scratch sketches
-working_build.mp4   # demo of the current build
+working_build_v*.gif   # demo of the current build version
 ```
 
 
@@ -125,32 +125,29 @@ Install and run:
 ```bash
 uv sync
 # Plug in the programmed ESP32, then run the main loop:
-uv run python -m ball_plate.ball_tracker_v2
+uv run python -m ball_plate.main
 ```
 
 In the exposure window, use Up/Down to adjust brightness and Space to continue. In the calibration window, click all four plate corners in any order, press `r` to reset if needed, then press Space. Stop the loop with Ctrl+C or by closing/interruption; it currently has no dedicated quit key.
 
-The `ball-plate` console command is still a placeholder; use the module command above. Although `requirements.txt` is retained, `pyproject.toml`/`uv.lock` define the supported environment.
+The `ball-plate` console command is still a placeholder; use the module command above.`pyproject.toml`/`uv.lock` define the supported environment.
 
 Firmware: open `firmware/260530-200235-esp32dev/` with PlatformIO and upload to the ESP32.
 
-Requested host loop rates and geometry are configured in `src/ball_plate/config.py` (camera 60 Hz, control 50 Hz, table dimensions, servo arm length, and ball color). These are polling targets rather than guaranteed real-time rates; firmware IMU output is fixed at 20 Hz in `main.cpp`. Camera ID is configured as `CAM_ID`, but the exposure helper currently targets `/dev/video0` directly.
+Target loop rates and geometry constants are in `src/ball_plate/config.py` (camera Hz, control Hz, table dimensions, servo arm length, ball color, etc). 
 
 ## Design decisions
 
 - **Host/embedded split.** Estimation and control live in Python for fast iteration; the ESP32 handles servo pulses, IMU reads, and serial I/O. The serial protocol is plain-text and line-oriented.
-- **Typed state boundaries.** Each pipeline stage consumes and produces a dataclass, so every stage can be tested and swapped independently (e.g. replacing the finite-difference estimator with a Kalman filter changes one function, not the loop).
-- **Bound actuator commands.** Tilt commands clamp at ±10°, inverse kinematics clamps the `asin` input, and firmware constrains servo commands to 60–120°. Integral state is also bounded, though `KI` is currently zero.
+- **Typed state boundaries.** Each stage intakes and produces a dataclass, so every stage can be tested and swapped independently (e.g. replacing the finite-difference estimator with a Kalman filter changes one function, not the loop).
+- **Bound actuator commands.** Tilt commands clamp at ±10°, inverse kinematics clamps the `asin` input, and firmware constrains servo commands to 60–120°. Integral state is also bounded.
 
 
 
-## Roadmap
+## In Progress
 
-- [ ] Kalman filter for ball state estimation (replace finite-difference velocities)
-- [ ] Accel/gyro fusion for table attitude (complementary or Kalman)
-- [ ] Velocity error term in the D-path (currently damps absolute velocity, not error rate)
-- [ ] Color-mask robustness across lighting conditions
+- [ ] Kalman filter for ball state estimation 
+- [ ] Accel/gyro fusion for table state
 - [ ] Gain tuning + step-response plots (before/after)
 - [ ] Wire the `ball-plate` console entry point to the real loop (currently a placeholder stub)
-- [ ] Demo GIF in this README
 - [ ] Wiring diagram and full BOM
