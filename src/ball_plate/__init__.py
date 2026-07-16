@@ -1,2 +1,2 @@
-def main() -> None:
-    print("Hello from ball-plate!")
+def main():
+    pass
