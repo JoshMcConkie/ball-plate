@@ -2,7 +2,7 @@
 
 A ball-on-plate balancing testbed: a camera tracks a ball on a tilting table, a Python host estimates the ball and table state in real time, and a PID controller drives two servos through an ESP32 to keep the ball at a target position.
 
-**Status:** active prototype (summer 2026). The camera → finite-difference state estimation → PID → servo actuation loop is implemented; see the demo below. Kalman filtering and IMU gyro fusion are planned (see [Roadmap](#roadmap)).
+**Status:** active prototype (summer 2026). The camera → finite-difference state estimation → PID → servo actuation loop is implemented; see the demo below. Kalman filtering and IMU gyro fusion are planned.
 
 
 
