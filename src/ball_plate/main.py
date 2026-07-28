@@ -4,11 +4,11 @@ import cv2
 import numpy as np
 
 from ball_plate import perception, control, cam_tools, serial_io
-from ball_plate.estimation import table_estimator
+from ball_plate.estimation.table_estimator import TableEstimator
 from ball_plate.estimation.ball_estimator import BallEstimator
 from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
-from ball_plate.estimation.models import BallOnPlateModel
+from ball_plate.estimation.models import BallOnPlateModel, TableTiltModel
 from ball_plate.state import TableState, BallState
 
 # Linux wait key codes
@@ -108,7 +108,7 @@ print(f"PX_TO_M_X: {perception.PX_TO_M_X}",
       f"ORIGIN_PX: {perception.ORIGIN_PX}")
 cv2.destroyAllWindows()
 
-table_state = TableState(time.time(),0,0,0,0)
+table_state = TableState(time.monotonic(),0,0,0,0)
 imu_data = None
 while imu_data is None:
     imu_data = serial_io.fetch_packet(ser)
@@ -122,12 +122,13 @@ ball_meas = perception.get_ball_measurement(init_frame)
 ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0.0)
 system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
-log_timestamp = time.time()
+log_timestamp = time.monotonic()
 last_imu_poll = time.monotonic()
 last_control = time.monotonic()
 frame = init_frame
 
 ball_estimator = BallEstimator(BallOnPlateModel())
+table_estimator = TableEstimator(TableTiltModel())
 
 while True:
     now = time.monotonic()
@@ -139,10 +140,10 @@ while True:
         new_imu = serial_io.fetch_packet(ser)
         if new_imu is not None:
             imu_data = new_imu
-            table_state = table_estimator.get_table_state(table_state, imu_data)
+            table_state = table_estimator.estimate_vanilla_acc_only(table_state, imu_data)
 
     # Process Camera Feed
-    if (time.time() - ball_meas.timestamp) > 1/CAMERA_HZ:
+    if (time.monotonic() - ball_meas.timestamp) > 1/CAMERA_HZ:
         ret, frame = feed.read()
         if not ret:
             break
@@ -150,7 +151,7 @@ while True:
 
     # ==State Estimate==
     # Only update from a fresh, valid (ball found) measurement; otherwise hold
-    # the last known ball state so a lost ball doesn't snap to table center.
+    # the last known ball state so a lost ball doesn't snap.
     if ball_meas.found and ball_meas.timestamp > ball_state.timestamp:
         ball_state = ball_estimator.estimate_vanilla(ball_state, ball_meas)
 
@@ -163,8 +164,8 @@ while True:
         serial_io.send_packet(control_cmd, ser) # Send command to ESP32
 
     # ==Logging==
-    if (time.time() - log_timestamp) > 1/DEBUG_HZ:
-        log_timestamp = time.time()
+    if (time.monotonic() - log_timestamp) > 1/DEBUG_HZ:
+        log_timestamp = time.monotonic()
         # print(f"Timestamp: {log_timestamp}\n", 
         #     f"Ball State: {ball_state}\n",
         #     f"Table State: {table_state}\n", 
