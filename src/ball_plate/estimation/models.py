@@ -31,7 +31,7 @@ class BallOnPlateModel(LinearModel):
         '''
         Shifts the model prediction given table state and time passed
         args:
-            dt: Time (ms) passed since the last estimate (𝚫t)
+            dt: Time (s) passed since the last estimate (𝚫t)
         '''
         return np.array([[1,0,dt,0],
                         [0,1,0,dt],
@@ -42,7 +42,7 @@ class BallOnPlateModel(LinearModel):
         '''
         Shifts the model prediction given table state and time passed
         args:
-            dt: Time (ms) passed since the last estimate (𝚫t)
+            dt: Time (s) passed since the last estimate (𝚫t)
             tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
             tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
         '''
@@ -59,7 +59,7 @@ class BallOnPlateModel(LinearModel):
         acceleration noise on each axis (x,y)
 
         args:
-            dt: Time (ms) passed since the last estimate (𝚫t)
+            dt: Time (s) passed since the last estimate (𝚫t)
         '''
         a = dt * dt * dt * dt / 4
         b = dt * dt * dt / 2
@@ -75,10 +75,45 @@ class BallOnPlateModel(LinearModel):
         Updates the linear models coefficients given environment factors
 
         args:
-            dt: Time (ms) passed since the last estimate (𝚫t)
+            dt: Time (s) passed since the last estimate (𝚫t)
             tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
             tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
         '''
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_tangent_shift(dt, tilt_about_x, tilt_about_y)
+        self.Q = self.get_guass_Q(dt)
+
+
+class TableTiltModel(LinearModel):
+
+    def get_tangent_scale(self, dt: float):
+        '''
+        Shifts the model prediction given time passed
+        args:
+            dt: Time (s) passed since the last estimate (𝚫t)
+        '''
+        return np.array([[1,0,dt,0],
+                        [0,1,0,dt],
+                        [0,0,1,0],
+                        [0,0,0,1]])
+
+    # TODO: Investigate increasing Q when rotational velocity increases
+    def get_guass_Q(self,dt: float)->NDArray[np.float64]:
+            '''
+            This Q model noise covariance assumes equal, independent, gaussian
+            acceleration noise on each axis (tilt_about_x,tilt_about_y)
+    
+            args:
+                dt: Time (s) passed since the last estimate (𝚫t)
+            '''
+            a = dt * dt * dt * dt / 4
+            b = dt * dt * dt / 2
+            c = dt * dt
+            acc_var = 0 # TODO: the single axis acceleration variance of the model (for Q)
+            return acc_var * np.array([[a,0,b,0],
+                                    [0,a,0,b],
+                                    [b,0,c,0],
+                                    [0,b,0,c]])
+    def update(self,ax,ay,az,gx,gy,gz,dt):
+        self.A = self.get_tangent_scale(dt)
         self.Q = self.get_guass_Q(dt)
