@@ -14,16 +14,13 @@ class KalmanFilter:
             model: linear model for predicting model state
             P_init: 4x4 estimate covariance matrix 
         '''
-        self.model = model
         self.P_prev = self.P = self.P_minus = P_init
-        # Transformation matrix from state space (x,y,vx,vy) -> measurement space (x,y)
-        self.H = np.array([[1,0,0,0],
-                           [0,1,0,0]])
+        # Transformation matrix from state space -> measurement space (x,y)
 
         # x,y,vx,vy
         self.state_est_prev = self.state_est_minus = self.state_est = np.zeros((4,1))
 
-    def predict(self, dt: float, tilt_about_x: float, tilt_about_y: float)->NDArray[np.float64]:
+    def predict(self,model)->NDArray[np.float64]:
         '''
         Estimate the current state using the model given the table table state and time.
         Alters several instance attributes.
@@ -36,14 +33,13 @@ class KalmanFilter:
         output:
             4x1 ball state model prediction
         '''
-        self.model.update(dt, tilt_about_x, tilt_about_y) # update A,B,Q in linear model
-        self.state_est_minus = self.model.A @ self.state_est_prev + self.model.B
-        self.P_minus = self.model.A @ self.P @ self.model.A.T + self.model.Q
+        self.state_est_minus = model.A @ self.state_est_prev + model.B
+        self.P_minus = model.A @ self.P @ model.A.T + model.Q
         
         return self.state_est_minus
 
     def revise_prediction(self, meas: NDArray[np.float64],
-                 meas_cov: NDArray[np.float64])->NDArray[np.float64]:
+                 meas_cov: NDArray[np.float64], H: NDArray[np.float64])->NDArray[np.float64]:
         '''
         Revise the instances state prediction with measurement data using Kalman Gain.
         Alters several instance attributes.
@@ -51,17 +47,18 @@ class KalmanFilter:
         args:
             meas: 2x1 ball position measurement in mm, aka Z_n
             meas_cov: 2x2 ball position covariance matrix, aka R
+            Transformation matrix from state space -> measurement space (x,y)
 
         output:
             4x1 weighted model-measurement ball state estimate
         '''
-        K = self.P @ self.H.T @ np.linalg.inv(self.H @ self.P @ self.H.T + meas_cov)
+        K = self.P @ H.T @ np.linalg.inv(H @ self.P @ H.T + meas_cov)
         self.state_est = self.state_est_minus + K @ (meas - self.state_est_minus)
         self.state_est_prev = self.state_est
-        self.P = (np.identity(self.P.shape[0]) - K @ self.H) @ self.P_minus
+        self.P = (np.identity(self.P.shape[0]) - K @ H) @ self.P_minus
         return self.state_est
 
-    def estimate_state(self, dt, tilt_about_x, tilt_about_y, meas, meas_cov):
+    def estimate_state(self, model, meas, meas_cov, H):
         '''
         Wraps prediction and revision steps.
             dt: Time (ms) passed since the last estimate (𝚫t)
@@ -70,5 +67,5 @@ class KalmanFilter:
             meas: 2x1 ball position measurement in mm, (Z_n)
             meas_cov: 2x2 ball position covariance matrix, (R)
         '''
-        self.predict(dt, tilt_about_x, tilt_about_y)
-        return self.revise_prediction(meas, meas_cov)
+        self.predict(model)
+        return self.revise_prediction(meas, meas_cov, H)

@@ -8,6 +8,7 @@ from ball_plate.state import BallMeasurement, BallState, TableState
 
 class BallEstimator:
     def __init__(self, model: BallOnPlateModel):
+        self.model = model
         estimate_cov = .01 * np.identity(4) # TODO: find good initial estimate covariance (P)
         self.filter = KalmanFilter(model,estimate_cov)
         self.meas_cov = 0.01 * np.identity(2) # TODO: measure actual camera tracking covariance
@@ -18,11 +19,10 @@ class BallEstimator:
         Estimation using a kalman filter
         '''
         dt = time.monotonic() - self.last_timestamp
+        self.model.update(dt, table_state.tilt_about_x, table_state.tilt_about_y) # update A,B,Q in linear model
         self.last_timestamp = time.monotonic()
-        state = self.filter.estimate_state(dt=dt,
-                                        tilt_about_x=table_state.tilt_about_x,
-                                        tilt_about_y=table_state.tilt_about_y,
-                                        meas=meas.get_meas_vector(), meas_cov=self.meas_cov)
+        state = self.filter.estimate_state(self.model, meas=meas.get_meas_vector(), 
+                                        meas_cov=self.meas_cov, H=meas.H)
         
         return BallState(time.monotonic(), *state)
     

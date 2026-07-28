@@ -8,6 +8,9 @@ SystemState     → controller → ControlCommand
 '''
 from dataclasses import dataclass
 import numpy as np
+from typing import ClassVar
+
+from numpy.typing import NDArray
 
 @dataclass
 class IMUReading:
@@ -21,6 +24,8 @@ class IMUReading:
     
 @dataclass
 class BallMeasurement:
+    H: ClassVar[NDArray[np.float64]] = np.array([[1.0,0.0,0.0,0.0], # ball state -> measurement state
+                                                [0.0,1.0,0.0,0.0]])
     timestamp: float
     x_px: int   # pixel coordinates
     y_px: int   
