@@ -14,6 +14,8 @@ from numpy.typing import NDArray
 
 @dataclass
 class IMUReading:
+    H: ClassVar[NDArray[np.float64]] = np.identity(4) # table state -> measurement state
+                                                 
     timestamp: float
     ax: float
     ay: float
