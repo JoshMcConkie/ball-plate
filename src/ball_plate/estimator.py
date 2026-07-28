@@ -48,16 +48,13 @@ def get_ball_state(ball_state_old: BallState,
 #=====Kalman Filter =======
 
 class LinearModel:
-    '''Recursive model of the form Y = A@X + B with noise covariance Q.
+    '''Recursive model of the form X_pred = A@X + B with noise covariance Q.
 
     args:
 
-        get_A(dt): Model scalar matrix
-            2D numpy array generator that takes dt as input
-        get_B(dt): Model shift
-            2D numpy array generator that takes dt as input
-        get_Q(dt): Model noise covariance matrix.
-            2D numpy array generator that takes dt as input
+        A_init: 4x4 scaling (Jacobian) matrix
+        B_init: 4x1 shift matrix
+        Q_init: 4x4 noise covariance matrix.
     '''
     def __init__(self,
                  A_init: NDArray[np.float64],
@@ -67,26 +64,29 @@ class LinearModel:
         self.B = B_init
         self.Q = Q_init
 
+    def update(self,*args,**kwargs)->None:
+        raise(NotImplementedError)
+
 
 class LinearModel_RollPitch(LinearModel):
-    def get_tangent_scale(self, dt:float):
+    def get_tangent_scale(self, dt: float):
         '''
         Shifts the model prediction given table state and time passed
         args:
-            dt: Time (ms) passed since the last estimate
+            dt: Time (ms) passed since the last estimate (𝚫t)
         '''
         return np.array([[1,0,dt,0],
                         [0,1,0,dt],
                         [0,0,1,0],
                         [0,0,0,1]])
 
-    def get_tangent_shift(self, dt:float, roll, pitch):
+    def get_tangent_shift(self, dt: float, roll: float, pitch: float)->NDArray[np.float64]:
         '''
         Shifts the model prediction given table state and time passed
         args:
-            dt: Time (ms) passed since the last estimate
-            roll: Table roll in degrees (cw rotation seen from x+)
-            pitch: Table pitch in degrees (cw rotation seen from y+)
+            dt: Time (ms) passed since the last estimate (𝚫t)
+            roll: Table roll in degrees (cw rotation seen from x+), (φ)
+            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
         '''
         g = 9.8
         c = 1 #TODO: find sphere radius constant
@@ -95,12 +95,13 @@ class LinearModel_RollPitch(LinearModel):
                                 -2 * np.sin(2*pitch) * dt,
                                 2 * np.sin(2*roll) * dt])
 
-    def get_guass_Q(self,dt:float):
+    def get_guass_Q(self,dt: float)->NDArray[np.float64]:
         '''
         This Q model noise covariance assumes equal, independent, gaussian
         acceleration noise on each axis (x,y)
+
         args:
-            dt: (float) Time (ms) passed since the last estimate
+            dt: Time (ms) passed since the last estimate (𝚫t)
         '''
         a = dt * dt * dt * dt / 4
         b = dt * dt * dt / 2
@@ -111,13 +112,14 @@ class LinearModel_RollPitch(LinearModel):
                                 [b,0,c,0],
                                 [0,b,0,c]])
     
-    def update_model(self,dt: float,roll: float,pitch: float)->None:
+    def update(self, dt: float,roll: float,pitch: float)->None:
         '''
         Updates the linear models coefficients given environment factors
+
         args:
-            dt: Time (ms) passed since the last estimate
-            roll: Table roll in degrees (cw rotation seen from x+)
-            pitch: Table pitch in degrees (cw rotation seen from y+)
+            dt: Time (ms) passed since the last estimate (𝚫t)
+            roll: Table roll in degrees (cw rotation seen from x+), (φ)
+            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
         '''
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_tangent_shift(dt,roll,pitch)
@@ -125,29 +127,42 @@ class LinearModel_RollPitch(LinearModel):
 
 
 class KalmanFilter:
-    def __init__(self,model,P_init:np.ndarray):
+    def __init__(self, model: LinearModel, P_init: np.ndarray):
         self.model = model
         self.P_prev = self.P = self.P_minus = P_init # initial estimate noise
 
         self.H = np.array([[1,0,0,0],
                            [0,1,0,0]])
 
-        self.state_est_prev = np.zeros((4,1)) # x,y,vx,vy
-        self.state_est_minus = np.ndarray((4,1)) # x,y,vx,vy
-        self.state_est = np.ndarray((4,1)) # x,y,vx,vy
+        # x,y,vx,vy
+        self.state_est_prev = self.state_est_minus = np.zeros((4,1))
+        self.state_est = np.zeros((4,1))
 
-    def h_predict(self,dt,roll,pitch):
+    def predict(self, dt: float, roll: float, pitch:float)->NDArray[np.float64]:
         '''
-        Estimate the current state using the model and table params
+        Estimate the current state using the model given the table table state and time.
+
+        args:
+            dt: Time (ms) passed since the last estimate (𝚫t)
+            roll: Table roll in degrees (cw rotation seen from x+) (φ)
+            pitch: Table pitch in degrees (cw rotation seen from y+) (θ)
         '''
-        self.model.set_state(dt,roll,pitch)
+        self.model.update(dt,roll,pitch) # update A,B,Q in linear model
         self.state_est_minus = self.model.A @ self.state_est_prev + self.model.B
-        self.P_minus = self.model.A @ self.model.P @ self.model.A.T + self.model.Q
+        self.P_minus = self.model.A @ self.P @ self.model.A.T + self.model.Q
         return self.state_est_minus
 
-    def h_update(self,meas: NDArray[np.float64], meas_cov):
+    def revise_prediction(self, meas: NDArray[np.float64],
+                 meas_cov: NDArray[np.float64])->NDArray[np.float64]:
         '''
-        Update the estimate with a measurement
+        Revise the instances state prediction with measurement data using Kalman Gain.
+        
+        args:
+            meas: 2x1 ball position measurement in mm, aka Z_n
+            meas_cov: 2x2 ball position covariance matrix, aka R
+
+        output:
+            4x1 composite ball state estimate
         '''
         K = self.P @ self.H.T @ np.linalg.inv(self.H @ self.P @ self.H.T + meas_cov)
         self.state_est = self.state_est_minus + K @ (meas - self.state_est_minus)
@@ -156,41 +171,18 @@ class KalmanFilter:
         return self.state_est
 
     def estimate_state(self,dt,roll,pitch,meas,meas_cov):
-        self.h_predict(dt,roll,pitch)
-        return self.h_update(meas, meas_cov)
+        '''
+        Wraps prediction and revision steps.
+            dt: Time (ms) passed since the last estimate (𝚫t)
+            roll: Table roll in degrees (cw rotation seen from x+), (φ)
+            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
+            meas: 2x1 ball position measurement in mm, (Z_n)
+            meas_cov: 2x2 ball position covariance matrix, (R)
+        '''
+        self.predict(dt,roll,pitch)
+        return self.revise_prediction(meas, meas_cov)
 
-# get_A()
-def get_tangent_step(dt:float):
-    return np.array([[1,0,dt,0],
-                     [0,1,0,dt],
-                     [0,0,1,0],
-                     [0,0,0,1]])
-
-#  get_B()
-def get_tangent_shift(dt:float,roll,pitch):
-    g = 9.8
-    c = 1 #TODO: find sphere radius constant
-    return g * c * np.array([-np.sin(2*pitch) * dt * dt,
-                             np.sin(2*roll) * dt * dt,
-                             -2 * np.sin(2*pitch) * dt,
-                             2 * np.sin(2*roll) * dt])
-
-
-def get_model_acc_variance()->float:
-    # TODO: the single axis variance of the model (for Q)
-    pass
-
-def get_tangent_Q_cov(dt:float,roll,pitch):
-    a = dt * dt * dt * dt / 4
-    b = dt * dt * dt / 2
-    c = dt * dt
-    acc_var = # TODO: the single axis variance of the model (for Q)
-    return acc_var * np.array([[a,0,b,0],
-                               [0,a,0,b],
-                               [b,0,c,0],
-                               [0,b,0,c]])
-
-# Initial matrix construction
+# ======= Initial matrix construction
 def measure_camera_mm_covariance()->NDArray[np.float64]:
     # TODO: measure still camera noise (R)
     pass
