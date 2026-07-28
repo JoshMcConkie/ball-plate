@@ -72,15 +72,3 @@ class KalmanFilter:
         '''
         self.predict(dt,roll,pitch)
         return self.revise_prediction(meas, meas_cov)
-
-# ======= Initial matrix construction
-def measure_camera_mm_covariance()->NDArray[np.float64]:
-    # TODO: measure still camera noise (R)
-    pass
-
-# initial estimate covariance (P) guess
-# this will autocorrect after a few iterations
-P_init = np.array([[0.01,0.0,0.0,0.0],
-                  [0.0,0.01,0.0,0.0],
-                  [0.0,0.0,0.01,0.0],
-                  [0.0,0.0,0.0,0.01]])

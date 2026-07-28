@@ -4,9 +4,11 @@ import cv2
 import numpy as np
 
 from ball_plate import perception, control, cam_tools, serial_io
-from ball_plate.estimation import ball_estimator, table_estimator
+from ball_plate.estimation import table_estimator
+from ball_plate.estimation.ball_estimator import BallEstimator
 from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
+from ball_plate.estimation.models import BallOnPlateModel
 from ball_plate.state import TableState, BallState
 
 # Linux wait key codes
@@ -125,6 +127,8 @@ last_imu_poll = time.monotonic()
 last_control = time.monotonic()
 frame = init_frame
 
+ball_estimator = BallEstimator(BallOnPlateModel())
+
 while True:
     now = time.monotonic()
 
@@ -148,7 +152,7 @@ while True:
     # Only update from a fresh, valid (ball found) measurement; otherwise hold
     # the last known ball state so a lost ball doesn't snap to table center.
     if ball_meas.found and ball_meas.timestamp > ball_state.timestamp:
-        ball_state = ball_estimator.get_ball_state(ball_state, ball_meas)
+        ball_state = ball_estimator.estimate_vanilla(ball_state, ball_meas)
 
     # ==Control==
     if now - last_control >= 1/CONTROL_HZ:

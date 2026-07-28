@@ -15,9 +15,9 @@ class LinearModel:
         Q_init: 4x4 noise covariance matrix.
     '''
     def __init__(self,
-                 A_init: NDArray[np.float64],
-                 B_init: NDArray[np.float64],
-                 Q_init: NDArray[np.float64]):
+                 A_init: NDArray[np.float64]=np.identity(4),
+                 B_init: NDArray[np.float64]=np.zeros((4,1)),
+                 Q_init: NDArray[np.float64]=np.identity(4)):
         self.A = A_init
         self.B = B_init
         self.Q = Q_init

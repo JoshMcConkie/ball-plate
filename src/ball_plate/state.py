@@ -7,6 +7,7 @@ SystemState     → controller → ControlCommand
 
 '''
 from dataclasses import dataclass
+import numpy as np
 
 @dataclass
 class IMUReading:
@@ -29,6 +30,8 @@ class BallMeasurement:
     found: bool
     timestamp: float
     confidence: float
+    def get_meas_vector(self):
+        return np.array([self.x_m,self.y_m])
 
 @dataclass
 class TableState:
