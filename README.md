@@ -74,7 +74,7 @@ SystemState     → controller → ControlCommand
 
 ### Control (`control.py`)
 
-- PID on ball position error (currently PD-only: `KP = 80.0`, `KD = 20.0`, `KI = 0.0`) producing a desired table tilt, with integral clamping and tilt saturation at ±10°. The derivative term currently damps measured ball velocity.
+- PID on ball position error producing a desired table tilt, with integral clamping and tilt saturation at ±10°. The derivative term currently damps measured ball velocity.
 - Inverse kinematics from desired tilt to servo angle: the required edge lift for a tilt θ is `(table_width / 2) · sin(θ)`, and the servo arm rotation is `asin(lift / arm_length)`, clamped to the asin domain so an unreachable tilt saturates instead of crashing.
 
 
