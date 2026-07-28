@@ -58,9 +58,7 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
     elif _integral_y < -MAX_INTEGRAL:
         _integral_y = -MAX_INTEGRAL
 
-    # A sensor state can be reused by more than one control iteration. Do not
-    # differentiate it again when its timestamp has not advanced, and suppress
-    # the derivative kick on the first sample.
+    # A sensor state can be reused by more than one control iteration.
     if dt > 0.0 and _error_x_1 is not None and _error_y_1 is not None:
         error_vx = alpha*(error_x - _error_x_1) / dt + (1-alpha) * _error_vx_1
         error_vy = alpha*(error_y - _error_y_1) / dt + (1-alpha) * _error_vy_1
@@ -71,7 +69,7 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
     if dt > 0.0 or _error_x_1 is None:
         _error_x_1 = error_x
         _error_y_1 = error_y
-    # Convert the position and velocity error into the requested plate tilt.
+    # Convert the position and velocity error into the plate tilt.
     pitch_deg = (KP * error_x + KI * _integral_x + KD * error_vx)
     roll_deg = (KP * error_y + KI * _integral_y + KD * error_vy)
 
