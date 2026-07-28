@@ -10,7 +10,7 @@ class BallEstimator:
     def __init__(self, model: BallOnPlateModel):
         self.model = model
         estimate_cov = .01 * np.identity(4) # TODO: find good initial estimate covariance (P)
-        self.filter = KalmanFilter(model,estimate_cov)
+        self.filter = KalmanFilter(estimate_cov)
         self.meas_cov = 0.01 * np.identity(2) # TODO: measure actual camera tracking covariance
         self.last_timestamp = time.monotonic()
 
