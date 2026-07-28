@@ -1,6 +1,17 @@
 from math import atan2, sqrt, pi
 from ball_plate.state import IMUReading, TableState
 
+# TODO: implement new TableEstimator class
+class TableEstimator:
+    def __init__(self):
+        pass
+
+    def estimate_kalman(self, meas: IMUReading):
+        pass
+
+    def estimate_vanilla(self):
+        pass
+
 def estimate_table_angle(table_old:TableState, imu_new:IMUReading):
     # TODO: Estimate table roll and pitch from imu acc/gyro data and expected angle
     roll_deg_acc  = atan2(imu_new.ay, imu_new.az) * 180.0 / pi
