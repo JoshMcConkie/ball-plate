@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from ball_plate import perception, control, cam_tools, serial_io
-from ball_plate import estimator
+from ball_plate.estimation import ball_estimator, table_estimator
 from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
 from ball_plate.state import TableState, BallState
@@ -135,7 +135,7 @@ while True:
         new_imu = serial_io.fetch_packet(ser)
         if new_imu is not None:
             imu_data = new_imu
-            table_state = estimator.get_table_state(table_state, imu_data)
+            table_state = table_estimator.get_table_state(table_state, imu_data)
 
     # Process Camera Feed
     if (time.time() - ball_meas.timestamp) > 1/CAMERA_HZ:
@@ -148,7 +148,7 @@ while True:
     # Only update from a fresh, valid (ball found) measurement; otherwise hold
     # the last known ball state so a lost ball doesn't snap to table center.
     if ball_meas.found and ball_meas.timestamp > ball_state.timestamp:
-        ball_state = estimator.get_ball_state(ball_state, ball_meas)
+        ball_state = ball_estimator.get_ball_state(ball_state, ball_meas)
 
     # ==Control==
     if now - last_control >= 1/CONTROL_HZ:
