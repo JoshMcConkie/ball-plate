@@ -21,7 +21,7 @@ constexpr double SERVOX_DEG_MAX = 120.0, SERVOY_DEG_MAX = 120.0;
 double servox_cmd = 90.0, servoy_cmd = 90.0;
 
 // IMU state
-double roll = 0, pitch = 0;
+double tilt_about_x = 0, tilt_about_y = 0;
 
 // Serial read var
 String line;

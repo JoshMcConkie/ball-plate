@@ -19,7 +19,9 @@ class BallEstimator:
         '''
         dt = time.monotonic() - self.last_timestamp
         self.last_timestamp = time.monotonic()
-        state = self.filter.estimate_state(dt=dt, roll=TableState.roll, pitch=TableState.pitch,
+        state = self.filter.estimate_state(dt=dt,
+                                        tilt_about_x=table_state.tilt_about_x,
+                                        tilt_about_y=table_state.tilt_about_y,
                                         meas=meas.get_meas_vector(), meas_cov=self.meas_cov)
         
         return BallState(time.monotonic(), *state)

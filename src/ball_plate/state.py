@@ -36,10 +36,10 @@ class BallMeasurement:
 @dataclass
 class TableState:
     timestamp: float
-    roll: float
-    pitch: float
-    roll_rate: float
-    pitch_rate: float
+    tilt_about_x: float
+    tilt_about_y: float
+    tilt_about_x_rate: float
+    tilt_about_y_rate: float
 
 @dataclass
 class BallState:
@@ -65,12 +65,11 @@ class ReferenceState:
 @dataclass
 class ControlCommand:
     timestamp: float
-    roll_deg: float
-    pitch_deg: float
+    tilt_about_x_deg: float
+    tilt_about_y_deg: float
     servox_deg: float
     servoy_deg: float
 
     def get_cmd_str(self):
         return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n"
-
 

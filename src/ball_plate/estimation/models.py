@@ -38,20 +38,20 @@ class BallOnPlateModel(LinearModel):
                         [0,0,1,0],
                         [0,0,0,1]])
 
-    def get_tangent_shift(self, dt: float, roll: float, pitch: float)->NDArray[np.float64]:
+    def get_tangent_shift(self, dt: float, tilt_about_x: float, tilt_about_y: float)->NDArray[np.float64]:
         '''
         Shifts the model prediction given table state and time passed
         args:
             dt: Time (ms) passed since the last estimate (𝚫t)
-            roll: Table roll in degrees (cw rotation seen from x+), (φ)
-            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
+            tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
+            tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
         '''
         g = 9.8
         c = 1 #TODO: find sphere radius constant
-        return g * c * np.array([-np.sin(2*pitch) * dt * dt,
-                                np.sin(2*roll) * dt * dt,
-                                -2 * np.sin(2*pitch) * dt,
-                                2 * np.sin(2*roll) * dt])
+        return g * c * np.array([-np.sin(2*tilt_about_y) * dt * dt,
+                                np.sin(2*tilt_about_x) * dt * dt,
+                                -2 * np.sin(2*tilt_about_y) * dt,
+                                2 * np.sin(2*tilt_about_x) * dt])
 
     def get_guass_Q(self,dt: float)->NDArray[np.float64]:
         '''
@@ -70,15 +70,15 @@ class BallOnPlateModel(LinearModel):
                                 [b,0,c,0],
                                 [0,b,0,c]])
     
-    def update(self, dt: float,roll: float,pitch: float)->None:
+    def update(self, dt: float, tilt_about_x: float, tilt_about_y: float)->None:
         '''
         Updates the linear models coefficients given environment factors
 
         args:
             dt: Time (ms) passed since the last estimate (𝚫t)
-            roll: Table roll in degrees (cw rotation seen from x+), (φ)
-            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
+            tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
+            tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
         '''
         self.A = self.get_tangent_scale(dt)
-        self.B = self.get_tangent_shift(dt,roll,pitch)
+        self.B = self.get_tangent_shift(dt, tilt_about_x, tilt_about_y)
         self.Q = self.get_guass_Q(dt)

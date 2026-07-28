@@ -23,20 +23,20 @@ class KalmanFilter:
         # x,y,vx,vy
         self.state_est_prev = self.state_est_minus = self.state_est = np.zeros((4,1))
 
-    def predict(self, dt: float, roll: float, pitch:float)->NDArray[np.float64]:
+    def predict(self, dt: float, tilt_about_x: float, tilt_about_y: float)->NDArray[np.float64]:
         '''
         Estimate the current state using the model given the table table state and time.
         Alters several instance attributes.
 
         args:
             dt: Time (ms) passed since the last estimate (𝚫t)
-            roll: Table roll in degrees (cw rotation seen from x+) (φ)
-            pitch: Table pitch in degrees (cw rotation seen from y+) (θ)
+            tilt_about_x: Table tilt about x in degrees (cw seen from x+) (φ)
+            tilt_about_y: Table tilt about y in degrees (cw seen from y+) (θ)
             
         output:
             4x1 ball state model prediction
         '''
-        self.model.update(dt,roll,pitch) # update A,B,Q in linear model
+        self.model.update(dt, tilt_about_x, tilt_about_y) # update A,B,Q in linear model
         self.state_est_minus = self.model.A @ self.state_est_prev + self.model.B
         self.P_minus = self.model.A @ self.P @ self.model.A.T + self.model.Q
         
@@ -61,14 +61,14 @@ class KalmanFilter:
         self.P = (np.identity(self.P.shape[0]) - K @ self.H) @ self.P_minus
         return self.state_est
 
-    def estimate_state(self,dt,roll,pitch,meas,meas_cov):
+    def estimate_state(self, dt, tilt_about_x, tilt_about_y, meas, meas_cov):
         '''
         Wraps prediction and revision steps.
             dt: Time (ms) passed since the last estimate (𝚫t)
-            roll: Table roll in degrees (cw rotation seen from x+), (φ)
-            pitch: Table pitch in degrees (cw rotation seen from y+), (θ)
+            tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
+            tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
             meas: 2x1 ball position measurement in mm, (Z_n)
             meas_cov: 2x2 ball position covariance matrix, (R)
         '''
-        self.predict(dt,roll,pitch)
+        self.predict(dt, tilt_about_x, tilt_about_y)
         return self.revise_prediction(meas, meas_cov)

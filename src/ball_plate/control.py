@@ -20,10 +20,10 @@ _integral_x = 0.0
 _integral_y = 0.0
 _last_timestamp = None
 
-def get_servo_angles(roll_deg: float, pitch_deg: float)->tuple[float,float]:
+def get_servo_angles(tilt_about_x_deg: float, tilt_about_y_deg: float)->tuple[float,float]:
     # Edge lift needed for tilt = (table/2)*sin(tilt); servo arm rotates by asin(lift/arm)
-    arg_x = (TABLE_W_M/(2*SERVO_ARM_LENGTH)) * sin(radians(pitch_deg))
-    arg_y = (TABLE_H_M/(2*SERVO_ARM_LENGTH)) * sin(radians(roll_deg))
+    arg_x = (TABLE_W_M/(2*SERVO_ARM_LENGTH)) * sin(radians(tilt_about_y_deg))
+    arg_y = (TABLE_H_M/(2*SERVO_ARM_LENGTH)) * sin(radians(tilt_about_x_deg))
     # Clamp to asin domain in case the requested tilt exceeds the arm's reach.
     # asin(...) is the servo deflection from flat; offset by the firmware
     # neutral (90 deg) so a balanced plate commands flat instead of an extreme.
@@ -70,21 +70,21 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
         _error_x_1 = error_x
         _error_y_1 = error_y
     # Convert the position and velocity error into the plate tilt.
-    pitch_deg = (KP * error_x + KI * _integral_x + KD * error_vx)
-    roll_deg = (KP * error_y + KI * _integral_y + KD * error_vy)
+    tilt_about_y_deg = (KP * error_x + KI * _integral_x + KD * error_vx)
+    tilt_about_x_deg = (KP * error_y + KI * _integral_y + KD * error_vy)
 
-    if pitch_deg > MAX_TILT_DEG:
-        pitch_deg = MAX_TILT_DEG
-    elif pitch_deg < -MAX_TILT_DEG:
-        pitch_deg = -MAX_TILT_DEG
-    if roll_deg > MAX_TILT_DEG:
-        roll_deg = MAX_TILT_DEG
-    elif roll_deg < -MAX_TILT_DEG:
-        roll_deg = -MAX_TILT_DEG
+    if tilt_about_y_deg > MAX_TILT_DEG:
+        tilt_about_y_deg = MAX_TILT_DEG
+    elif tilt_about_y_deg < -MAX_TILT_DEG:
+        tilt_about_y_deg = -MAX_TILT_DEG
+    if tilt_about_x_deg > MAX_TILT_DEG:
+        tilt_about_x_deg = MAX_TILT_DEG
+    elif tilt_about_x_deg < -MAX_TILT_DEG:
+        tilt_about_x_deg = -MAX_TILT_DEG
 
-    servox_deg, servoy_deg = get_servo_angles(roll_deg, pitch_deg)
+    servox_deg, servoy_deg = get_servo_angles(tilt_about_x_deg, tilt_about_y_deg)
 
-    return ControlCommand(system.timestamp, roll_deg, pitch_deg, servox_deg, servoy_deg)
+    return ControlCommand(system.timestamp, tilt_about_x_deg, tilt_about_y_deg, servox_deg, servoy_deg)
 
 def get_system_state(ball_state: BallState, table_state: TableState, ref_state: ReferenceState)->SystemState:
     timestamp = max(ball_state.timestamp,table_state.timestamp)

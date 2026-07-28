@@ -66,7 +66,7 @@ SystemState     → controller → ControlCommand
 
 ### Estimation (`estimator.py`)
 
-- Table roll/pitch from the IMU accelerometer (gravity vector), with finite-difference angular rates.
+- Table tilt about x/y from the IMU accelerometer (gravity vector), with finite-difference angular rates.
 - Ball velocity by finite difference of positions.
 - *In progress:* Kalman filter for the ball state and accel/gyro fusion for the table attitude — the current estimates are measurement-driven and noise-sensitive.
 
