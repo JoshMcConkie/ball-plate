@@ -23,6 +23,8 @@ class IMUReading:
     gx: float
     gy: float
     gz: float
+    def get_meas_vector(self):
+        return np.array([self.ax,self.ay,self.gx,self.gy,self.gz])
     
 @dataclass
 class BallMeasurement:
