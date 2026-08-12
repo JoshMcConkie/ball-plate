@@ -3,11 +3,11 @@ import time
 
 import numpy as np
 from ball_plate.estimation.kalman_filter import KalmanFilter
-from ball_plate.estimation.models import LinearModel, TableTiltModel
-from ball_plate.state import IMUMeasurement, TableState
+from ball_plate.estimation.models import LinearModel, PlateModel
+from ball_plate.state import IMUMeasurement, PlateState
 
 
-class TableEstimator:
+class PlateEstimator:
     def __init__(self, model:LinearModel):
         self.model = model
         estimate_cov = .5 * np.identity(4) # TODO: improve initial estimate covariance
@@ -22,9 +22,9 @@ class TableEstimator:
         state = self.filter.estimate_state(model=self.model,meas=, # TODO: alter so state is [roll,pitch,bias_x,bias_y]
                                            meas_cov=meas_cov, H=meas.H)
         
-        return TableState(self.last_timestamp, *state)
+        return PlateState(self.last_timestamp, *state)
         
-    def estimate_vanilla_acc_only(self, table_old:TableState, imu_new:IMUMeasurement):
+    def estimate_vanilla_acc_only(self, table_old:PlateState, imu_new:IMUMeasurement):
         '''
         Estimate of table state from differences in acceleration only
         '''
@@ -35,6 +35,6 @@ class TableEstimator:
         tilt_about_x_rate = (tilt_about_x-table_old.tilt_about_x) / dt
         tilt_about_y_rate = (tilt_about_y-table_old.tilt_about_y) / dt
 
-        return TableState(imu_new.timestamp,
+        return PlateState(imu_new.timestamp,
                               tilt_about_x, tilt_about_y,
                               tilt_about_x_rate, tilt_about_y_rate)

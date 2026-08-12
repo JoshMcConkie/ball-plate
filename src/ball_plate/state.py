@@ -37,13 +37,11 @@ class BallMeasurement:
     y_m: float
     radius_px: int
     found: bool
-    timestamp: float
-    confidence: float
     def get_meas_vector(self):
         return np.array([self.x_m,self.y_m])
 
 @dataclass
-class TableState:
+class PlateState:
     timestamp: float
     tilt_about_x: float
     tilt_about_y: float
@@ -62,7 +60,7 @@ class BallState:
 class SystemState:
     timestamp: float
     ball: BallState
-    table: TableState
+    table: PlateState
     ref_state: ReferenceState
 
 @dataclass

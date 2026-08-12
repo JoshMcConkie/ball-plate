@@ -86,6 +86,6 @@ def get_command(system: SystemState, ref: ReferenceState)->ControlCommand:
 
     return ControlCommand(system.timestamp, tilt_about_x_deg, tilt_about_y_deg, servox_deg, servoy_deg)
 
-def get_system_state(ball_state: BallState, table_state: TableState, ref_state: ReferenceState)->SystemState:
+def get_system_state(ball_state: BallState, table_state: PlateState, ref_state: ReferenceState)->SystemState:
     timestamp = max(ball_state.timestamp,table_state.timestamp)
     return SystemState(timestamp, ball_state,table_state,ref_state)

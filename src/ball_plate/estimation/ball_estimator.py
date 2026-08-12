@@ -4,7 +4,7 @@ import numpy as np
 
 from ball_plate.estimation.kalman_filter import KalmanFilter
 from ball_plate.estimation.models import BallOnPlateModel
-from ball_plate.state import BallMeasurement, BallState, TableState
+from ball_plate.state import BallMeasurement, BallState, PlateState
 
 class BallEstimator:
     def __init__(self, model: BallOnPlateModel):
@@ -14,7 +14,7 @@ class BallEstimator:
         self.meas_cov = 0.01 * np.identity(2) # TODO: measure actual camera tracking covariance
         self.last_timestamp = time.monotonic()
 
-    def estimate_kalman(self, meas: BallMeasurement, table_state: TableState)->BallState:
+    def estimate_kalman(self, meas: BallMeasurement, table_state: PlateState)->BallState:
         '''
         Estimation using a kalman filter
         '''

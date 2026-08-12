@@ -29,7 +29,7 @@ class LinearModel:
 class BallOnPlateModel(LinearModel):
     def get_tangent_scale(self, dt: float):
         '''
-        Shifts the model prediction given table state and time passed
+        Shifts the model prediction given plate state and time passed
         args:
             dt: Time (s) passed since the last estimate (𝚫t)
         '''
@@ -40,11 +40,11 @@ class BallOnPlateModel(LinearModel):
 
     def get_tangent_shift(self, dt: float, tilt_about_x: float, tilt_about_y: float)->NDArray[np.float64]:
         '''
-        Shifts the model prediction given table state and time passed
+        Shifts the model prediction given plate state and time passed
         args:
             dt: Time (s) passed since the last estimate (𝚫t)
-            tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
-            tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
+            tilt_about_x: Plate tilt about x in degrees (cw seen from x+), (φ)
+            tilt_about_y: Plate tilt about y in degrees (cw seen from y+), (θ)
         '''
         g = 9.8
         c = 1 #TODO: find sphere radius constant
@@ -76,15 +76,24 @@ class BallOnPlateModel(LinearModel):
 
         args:
             dt: Time (s) passed since the last estimate (𝚫t)
-            tilt_about_x: Table tilt about x in degrees (cw seen from x+), (φ)
-            tilt_about_y: Table tilt about y in degrees (cw seen from y+), (θ)
+            tilt_about_x: Plate tilt about x in degrees (cw seen from x+), (φ)
+            tilt_about_y: Plate tilt about y in degrees (cw seen from y+), (θ)
         '''
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_tangent_shift(dt, tilt_about_x, tilt_about_y)
         self.Q = self.get_guass_Q(dt)
 
 
-class TableTiltModel(LinearModel):
+class PlateModel(LinearModel):
+    def __init__(self):
+        '''
+        args:
+            feed: cv2 video stream
+            calibrate: false triggers use of previous calibration data (default true)
+        '''
+        # To callibrate the Q matrix calculations, we need to seperate
+        # bias noise from gyro white noise using sampling.
+
 
     def get_tangent_scale(self, dt: float):
         '''
