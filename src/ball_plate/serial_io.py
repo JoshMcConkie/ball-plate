@@ -6,7 +6,7 @@ from serial.tools import list_ports
 from ball_plate.state import IMUMeasurement, ControlCommand
 
 
-def open_serial(preferred_port: str, baud_rate: float, timeout: float = .001) -> Serial:
+def open_serial(preferred_port: str, baud_rate: int, timeout: float = .001) -> Serial:
     """Open the serial connection to the ESP32.
 
     Tries the preferred port first, then falls back to auto-detecting any
@@ -54,18 +54,15 @@ def send_packet(control_cmd: ControlCommand, ser: Serial)->bool:
         return False
     return True
 
-def fetch_packet(ser: Serial)->IMUMeasurement:
+def fetch_values(ser: Serial)->list[float] | None:
     try: # send/recieve from esp32 through serial
         echo = ser.readline().decode(errors="ignore").strip()
         if not echo:
             return None # no complete line available yet, not an error
         values = list(map(float, echo.split()))
-
         if len(values) != 6:
             raise ValueError(f"Expected 6 IMU values, got {len(values)}: {echo!r}")
-
-        imu_data = IMUMeasurement(time.time(), *values)
-        return imu_data
+        return values
     except Exception as e:
         print("Serial read failed: ", e)
         return None
