@@ -88,7 +88,7 @@ class BallDetector:
         y = (self.map.origin_px_y - y_px) * self.map.px_to_m_y
         return x,y
 
-    def measure(self,frame: MatLike)->BallMeasurement | None:
+    def measure(self,frame: MatLike)->BallMeasurement:
         now = time.monotonic()
         mask = self._build_contour_mask(frame)
         meas_px = self._meas_px(mask)
