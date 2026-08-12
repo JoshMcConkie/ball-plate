@@ -5,7 +5,7 @@ import cv2
 from cv2 import COLOR_BGR2GRAY, COLOR_BGR2HSV, GaussianBlur, VideoCapture, cvtColor
 from cv2.typing import MatLike
 
-from ball_plate.config import CAM_ID, COLOR_BALL, TABLE_W_M, TABLE_H_M
+from ball_plate.config import CAM_ID, BALL_COLOR, TABLE_W_M, TABLE_H_M
 from ball_plate.state import BallMeasurement
 
 # Calibration state, set at startup via set_calibration()
@@ -57,6 +57,7 @@ class BallDetector:
                  ):
         self.map = coord_map
         self.color = color
+        self.last_meas = BallMeasurement(0,0,0,0,0,0,False) # initial dummy measurement
 
     def _build_contour_mask(self, frame: MatLike)-> MatLike:
         # Build mask
@@ -92,8 +93,8 @@ class BallDetector:
         mask = self._build_contour_mask(frame)
         meas_px = self._meas_px(mask)
         if meas_px is None:
-            return None # return dummy measurement
+            return self.last_meas # return previous measurement
         x_px, y_px, radius_px = meas_px
         x_m, y_m = self.px_to_meter(x_px, y_px)
-        confidence = radius_px / 100.0
-        return BallMeasurement(now,x_px,y_px,x_m,y_m,radius_px,True,confidence) # return actual measurement
+        self.last_meas = BallMeasurement(now,x_px,y_px,x_m,y_m,radius_px,True)
+        return self.last_meas # return actual measurement
