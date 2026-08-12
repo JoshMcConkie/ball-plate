@@ -4,7 +4,7 @@ import time
 import numpy as np
 from ball_plate.estimation.kalman_filter import KalmanFilter
 from ball_plate.estimation.models import LinearModel, TableTiltModel
-from ball_plate.state import IMUReading, TableState
+from ball_plate.state import IMUMeasurement, TableState
 
 
 class TableEstimator:
@@ -15,7 +15,7 @@ class TableEstimator:
         self.last_timestamp = time.monotonic()
 
 
-    def estimate_kalman(self, meas: IMUReading, meas_cov):
+    def estimate_kalman(self, meas: IMUMeasurement, meas_cov):
         dt = time.monotonic() - self.last_timestamp
         self.last_timestamp = time.monotonic()
         self.model.update(dt, meas.gx, meas.gy)
@@ -24,11 +24,11 @@ class TableEstimator:
         
         return TableState(self.last_timestamp, *state)
         
-    def estimate_vanilla_acc_only(self, table_old:TableState, imu_new:IMUReading):
+    def estimate_vanilla_acc_only(self, table_old:TableState, imu_new:IMUMeasurement):
         '''
         Estimate of table state from differences in acceleration only
         '''
-        dt = IMUReading.timestamp - table_old.timestamp
+        dt = IMUMeasurement.timestamp - table_old.timestamp
 
         tilt_about_x = atan2(imu_new.ay, hypot(imu_new.az, imu_new.ax)) * 180.0 / pi
         tilt_about_y = atan2(-imu_new.ax, hypot(imu_new.ay,imu_new.az)) * 180.0 / pi

@@ -13,7 +13,7 @@ from typing import ClassVar
 from numpy.typing import NDArray
 
 @dataclass
-class IMUReading:
+class IMUMeasurement:
     H: ClassVar[NDArray[np.float64]] = np.identity(4) # table state -> measurement state
                                                  
     timestamp: float
@@ -25,7 +25,7 @@ class IMUReading:
     gz: float
     def get_meas_vector(self):
         return np.array([self.ax,self.ay,self.gx,self.gy,self.gz])
-    
+
 @dataclass
 class BallMeasurement:
     H: ClassVar[NDArray[np.float64]] = np.array([[1.0,0.0,0.0,0.0], # ball state -> measurement state
@@ -33,8 +33,8 @@ class BallMeasurement:
     timestamp: float
     x_px: int   # pixel coordinates
     y_px: int   
-    x_m: int    # table coordinates
-    y_m: int
+    x_m: float  # table coordinates
+    y_m: float
     radius_px: int
     found: bool
     timestamp: float

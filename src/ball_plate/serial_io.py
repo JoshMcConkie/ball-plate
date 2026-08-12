@@ -3,7 +3,7 @@ import time
 from serial import Serial
 from serial.tools import list_ports
 
-from ball_plate.state import IMUReading, ControlCommand
+from ball_plate.state import IMUMeasurement, ControlCommand
 
 
 def open_serial(preferred_port: str, baud_rate: float, timeout: float = .001) -> Serial:
@@ -54,7 +54,7 @@ def send_packet(control_cmd: ControlCommand, ser: Serial)->bool:
         return False
     return True
 
-def fetch_packet(ser: Serial)->IMUReading:
+def fetch_packet(ser: Serial)->IMUMeasurement:
     try: # send/recieve from esp32 through serial
         echo = ser.readline().decode(errors="ignore").strip()
         if not echo:
@@ -64,7 +64,7 @@ def fetch_packet(ser: Serial)->IMUReading:
         if len(values) != 6:
             raise ValueError(f"Expected 6 IMU values, got {len(values)}: {echo!r}")
 
-        imu_data = IMUReading(time.time(), *values)
+        imu_data = IMUMeasurement(time.time(), *values)
         return imu_data
     except Exception as e:
         print("Serial read failed: ", e)
