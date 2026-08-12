@@ -8,11 +8,6 @@ from cv2.typing import MatLike
 from ball_plate.config import CAM_ID, BALL_COLOR, TABLE_W_M, TABLE_H_M
 from ball_plate.state import BallMeasurement
 
-# Calibration state, set at startup via set_calibration()
-PX_TO_M_X = 0.0
-PX_TO_M_Y = 0.0
-ORIGIN_PX = (0, 0)
-
 @dataclass(frozen=True)
 class CoordinateMap:
     px_to_m_x: float
@@ -43,6 +38,7 @@ class CoordinateMap:
                              TABLE_H_M / height_px,
                              cx,
                              cy)
+    
 
 def init_camera():
     cam = cv2.VideoCapture(CAM_ID, cv2.CAP_V4L2)
@@ -98,3 +94,11 @@ class BallDetector:
         x_m, y_m = self.px_to_meter(x_px, y_px)
         self.last_meas = BallMeasurement(now,x_px,y_px,x_m,y_m,radius_px,True)
         return self.last_meas # return actual measurement
+
+    def measure_px_only(self,frame:MatLike)->tuple[float,float] | None:
+        mask = self._build_contour_mask(frame)
+        meas_px = self._meas_px(mask)
+        if meas_px is None:
+            return None
+        x_px, y_px, _ = meas_px
+        return x_px, y_px

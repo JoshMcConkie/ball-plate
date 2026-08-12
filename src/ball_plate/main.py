@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from ball_plate import control, cam_tools, serial_io
+from ball_plate.estimation.calibration.tools import calibrate_ball
 from ball_plate.estimation.table_estimator import PlateEstimator
 from ball_plate.estimation.ball_estimator import BallEstimator
 from ball_plate.config import BALL_COLOR, BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
@@ -105,13 +106,30 @@ while True:
         break
 cv2.destroyAllWindows()
 
+
 #====Initialize perception objects====
 
 coordinate_map = ball.CoordinateMap.from_corners(corner_pts)
 ball_detector = ball.BallDetector(coordinate_map, BALL_COLOR)
 imu_reader = imu.IMUReader(ser)
 
-plate_state = PlateState(time.monotonic(),0,0,0,0)
+#====Calibrate objects for filtering====
+print("Calibrating camera noise. Do not move anything.")
+ball_cal = calibrate_ball(
+    feed,
+    ball_detector,
+    estimate_process_noise=True
+)
+
+#====Initialize models objects====
+ball_model = BallOnPlateModel(acc_var=ball_cal.acc_var)
+plate_model = PlateModel()
+
+#====Initialize estimation objects====
+ball_estimator = BallEstimator(ball_model, meas_cov=ball_cal.meas_cov)
+plate_estimator = PlateEstimator(plate_model)
+
+
 
 #====Initialize measurement objects====
 imu_meas = None
@@ -125,6 +143,7 @@ ball_meas = ball_detector.measure(frame)
 
 #====Initialize state/command objects====
 ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0.0)
+plate_state = PlateState(time.monotonic(),0,0,0,0)
 system_state = control.get_system_state(ball_state,plate_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
 
@@ -133,11 +152,7 @@ log_timestamp = time.monotonic()
 last_imu_poll = time.monotonic()
 last_control = time.monotonic()
 
-ball_model = BallOnPlateModel()
-plate_model = PlateModel()
 
-ball_estimator = BallEstimator(BallOnPlateModel())
-plate_estimator = PlateEstimator(PlateModel())
 
 # ================Main loop=====================
 while True:

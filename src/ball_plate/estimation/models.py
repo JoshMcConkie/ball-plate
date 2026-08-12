@@ -2,6 +2,8 @@
 Models for state estimation
 '''
 
+from typing import Any
+
 from cv2 import VideoCapture
 import numpy as np
 from numpy.typing import NDArray
@@ -30,6 +32,10 @@ class LinearModel:
 
 
 class BallOnPlateModel(LinearModel):
+    def __init__(self, acc_var: float):
+        super().__init__()
+        self.acc_var = acc_var
+
     def get_tangent_scale(self, dt: float):
         '''
         Shifts the model prediction given plate state and time passed
@@ -46,15 +52,15 @@ class BallOnPlateModel(LinearModel):
         Shifts the model prediction given plate state and time passed
         args:
             dt: Time (s) passed since the last estimate (𝚫t)
-            tilt_about_x: Plate tilt about x in degrees (cw seen from x+), (φ)
-            tilt_about_y: Plate tilt about y in degrees (cw seen from y+), (θ)
+            tilt_about_x: Plate tilt about x in radians (cw seen from x+), (φ)
+            tilt_about_y: Plate tilt about y in radians (cw seen from y+), (θ)
         '''
-        g = 9.8
-        c = 1 #TODO: find sphere radius constant
-        return g * c * np.array([-np.sin(2*tilt_about_y) * dt * dt,
-                                np.sin(2*tilt_about_x) * dt * dt,
-                                -2 * np.sin(2*tilt_about_y) * dt,
-                                2 * np.sin(2*tilt_about_x) * dt])
+        g = 9.8 # gravity
+        c = 5/7 # Rolling coef
+        return g * c * 0.25 * np.array([-np.sin(2*tilt_about_y) * dt * dt,
+                                        np.sin(2*tilt_about_x) * dt * dt,
+                                        -2 * np.sin(2*tilt_about_y) * dt,
+                                        2 * np.sin(2*tilt_about_x) * dt])
 
     def get_guass_Q(self,dt: float)->NDArray[np.float64]:
         '''
@@ -67,8 +73,7 @@ class BallOnPlateModel(LinearModel):
         a = dt * dt * dt * dt / 4
         b = dt * dt * dt / 2
         c = dt * dt
-        acc_var = 0 # TODO: the single axis acceleration variance of the model (for Q)
-        return acc_var * np.array([[a,0,b,0],
+        return self.acc_var * np.array([[a,0,b,0],
                                 [0,a,0,b],
                                 [b,0,c,0],
                                 [0,b,0,c]])
@@ -79,14 +84,15 @@ class BallOnPlateModel(LinearModel):
 
         args:
             dt: Time (s) passed since the last estimate (𝚫t)
-            tilt_about_x: Plate tilt about x in degrees (cw seen from x+), (φ)
-            tilt_about_y: Plate tilt about y in degrees (cw seen from y+), (θ)
+            tilt_about_x: Plate global frame tilt about x in radians (cw seen from x+), (φ)
+            tilt_about_y: Plate global frame tilt about y in radians (cw seen from y+), (θ)
         '''
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_tangent_shift(dt, tilt_about_x, tilt_about_y)
         self.Q = self.get_guass_Q(dt)
 
 
+""" Old IMU work
 class PlateModel(LinearModel):
     def __init__(self):
         '''
@@ -136,3 +142,4 @@ class PlateModel(LinearModel):
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_gyro_shift(gx,gy,dt)
         self.Q = self.get_guass_Q(gx, gy, dt)
+"""
