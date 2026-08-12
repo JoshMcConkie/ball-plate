@@ -8,11 +8,11 @@ from ball_plate.config import CAM_ID, COLOR_BALL, TABLE_W_M, TABLE_H_M
 from ball_plate.state import BallMeasurement
 
 # Calibration state, set at startup via set_calibration()
-PX_TO_M_X = None
-PX_TO_M_Y = None
+PX_TO_M_X = 0.0
+PX_TO_M_Y = 0.0
 ORIGIN_PX = (0, 0)
 
-def set_calibration(corners_px: list[tuple[int, int]]):
+def calibrate_coords(corners_px: list[tuple[int, int]]):
     '''Compute px->m scales and table-center origin from the 4 clicked table corners.
     Corners may be clicked in any order.'''
     global PX_TO_M_X, PX_TO_M_Y, ORIGIN_PX
@@ -27,8 +27,8 @@ def set_calibration(corners_px: list[tuple[int, int]]):
     tr = pts[np.argmin(d)]
     bl = pts[np.argmax(d)]
 
-    width_px = (np.linalg.norm(tr - tl) + np.linalg.norm(br - bl)) / 2.0
-    height_px = (np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2.0
+    width_px = float((np.linalg.norm(tr - tl) + np.linalg.norm(br - bl)) / 2.0)
+    height_px = float((np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2.0)
 
     PX_TO_M_X = TABLE_W_M / width_px
     PX_TO_M_Y = TABLE_H_M / height_px
@@ -69,7 +69,7 @@ def get_mask_color(color: tuple[int,int,int], frame: MatLike)-> MatLike:
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     return mask
 
-def get_ball_px_coords(mask: MatLike)->tuple[int,int,int]:
+def get_px(mask: MatLike)->tuple[int,int,int]:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if len(contours) > 0:
         contour = contours[0]
@@ -81,20 +81,20 @@ def get_ball_px_coords(mask: MatLike)->tuple[int,int,int]:
             return cx,cy,radius
     return None,None,None
 
-def get_ball_table_coords(x_px: int, y_px: int)->tuple[float,float]:
+def px_to_meter(x_px: int, y_px: int)->tuple[float,float]:
     # Image rows increase downward, so negate to make +y point up.
     x = (x_px - ORIGIN_PX[0]) * PX_TO_M_X
     y = (ORIGIN_PX[1] - y_px) * PX_TO_M_Y
     return x,y
 
-def get_ball_measurement(frame: MatLike)->BallMeasurement:
+def measure(frame: MatLike)->BallMeasurement:
     # TODO: get ball location from cv2 feed via color value contour
     now = time.time()
     mask = get_mask_color(COLOR_BALL, frame)
-    x_px, y_px, radius_px = get_ball_px_coords(mask)
+    x_px, y_px, radius_px = get_px(mask)
     found = x_px is not None and y_px is not None
     if not found:
         return BallMeasurement(now,0,0,0,0,0,False,0.0) # return dummy measurement
-    x_m, y_m = get_ball_table_coords(x_px, y_px)
+    x_m, y_m = px_to_meter(x_px, y_px)
     confidence = radius_px / 100.0
     return BallMeasurement(now,x_px,y_px,x_m,y_m,radius_px,True,confidence) # return actual measurement
