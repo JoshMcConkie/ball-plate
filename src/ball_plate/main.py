@@ -3,12 +3,13 @@ import serial
 import cv2
 import numpy as np
 
-from ball_plate import perception, control, cam_tools, serial_io
+from ball_plate import control, cam_tools, serial_io
 from ball_plate.estimation.table_estimator import TableEstimator
 from ball_plate.estimation.ball_estimator import BallEstimator
 from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
 from ball_plate.estimation.models import BallOnPlateModel, TableTiltModel
+from ball_plate.perception import ball, imu
 from ball_plate.state import TableState, BallState
 
 # Linux wait key codes
@@ -27,7 +28,7 @@ if SERIAL_ON:
     banner = ser.readline().decode(errors='ignore').strip()
     print("Banner:", banner)
 
-feed = perception.init_camera()
+feed = ball.init_camera()
 
 # ---Linux specific exposure solution---
 
@@ -102,23 +103,23 @@ while True:
     elif key == ord(' ') and len(corner_pts) == 4:
         break
 
-perception.set_calibration(corner_pts)
-print(f"PX_TO_M_X: {perception.PX_TO_M_X}",
-      f"PX_TO_M_Y: {perception.PX_TO_M_Y}",
-      f"ORIGIN_PX: {perception.ORIGIN_PX}")
+ball.calibrate_coords(corner_pts)
+print(f"PX_TO_M_X: {ball.PX_TO_M_X}",
+      f"PX_TO_M_Y: {ball.PX_TO_M_Y}",
+      f"ORIGIN_PX: {ball.ORIGIN_PX}")
 cv2.destroyAllWindows()
 
 table_state = TableState(time.monotonic(),0,0,0,0)
-imu_data = None
-while imu_data is None:
-    imu_data = serial_io.fetch_packet(ser)
+imu_meas = None
+while imu_meas is None:
+    imu_meas = imu.measure(ser)
 
 
 # ---Main loop---
 ret, init_frame = feed.read()
 if not ret:
     raise Exception("Failed to read initial frame")
-ball_meas = perception.get_ball_measurement(init_frame)
+ball_meas = ball.measure(init_frame)
 ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0.0)
 system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
@@ -127,8 +128,11 @@ last_imu_poll = time.monotonic()
 last_control = time.monotonic()
 frame = init_frame
 
+ball_model = BallOnPlateModel()
+table_model = TableTiltModel(feed)
+
 ball_estimator = BallEstimator(BallOnPlateModel())
-table_estimator = TableEstimator(TableTiltModel())
+table_estimator = TableEstimator(TableTiltModel(feed))
 
 while True:
     now = time.monotonic()
@@ -137,17 +141,17 @@ while True:
     # Read IMU
     if now - last_imu_poll >= 1/IMU_HZ:
         last_imu_poll = now
-        new_imu = serial_io.fetch_packet(ser)
+        new_imu = imu.measure(ser)
         if new_imu is not None:
-            imu_data = new_imu
-            table_state = table_estimator.estimate_vanilla_acc_only(table_state, imu_data)
+            imu_meas = new_imu
+            table_state = table_estimator.estimate_vanilla_acc_only(table_state, imu_meas)
 
     # Process Camera Feed
     if (time.monotonic() - ball_meas.timestamp) > 1/CAMERA_HZ:
         ret, frame = feed.read()
         if not ret:
             break
-        ball_meas = perception.get_ball_measurement(frame)
+        ball_meas = ball.measure(frame)
 
     # ==State Estimate==
     # Only update from a fresh, valid (ball found) measurement; otherwise hold

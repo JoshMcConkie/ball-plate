@@ -89,7 +89,7 @@ def px_to_meter(x_px: int, y_px: int)->tuple[float,float]:
 
 def measure(frame: MatLike)->BallMeasurement:
     # TODO: get ball location from cv2 feed via color value contour
-    now = time.time()
+    now = time.monotonic()
     mask = get_mask_color(COLOR_BALL, frame)
     x_px, y_px, radius_px = get_px(mask)
     found = x_px is not None and y_px is not None
