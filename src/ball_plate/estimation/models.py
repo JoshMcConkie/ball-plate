@@ -2,8 +2,11 @@
 Models for state estimation
 '''
 
+from cv2 import VideoCapture
 import numpy as np
 from numpy.typing import NDArray
+
+from ball_plate.estimation import calibration
 
 class LinearModel:
     '''Recursive model of the form X_pred = A@X + B with noise covariance Q.
@@ -91,6 +94,7 @@ class PlateModel(LinearModel):
             feed: cv2 video stream
             calibrate: false triggers use of previous calibration data (default true)
         '''
+        super().__init__()
         # To callibrate the Q matrix calculations, we need to seperate
         # bias noise from gyro white noise using sampling.
 
@@ -106,23 +110,29 @@ class PlateModel(LinearModel):
                         [0,0,1,0],
                         [0,0,0,1]])
 
+    def get_gyro_shift(self, gx:float, gy:float, dt:float):
+        pass
+
     # TODO: Investigate increasing Q when rotational velocity increases
-    def get_guass_Q(self,dt: float)->NDArray[np.float64]:
+    def get_guass_Q(self, gx:float, gy:float, dt:float)->NDArray[np.float64]:
             '''
             This Q model noise covariance assumes equal, independent, gaussian
-            acceleration noise on each axis (tilt_about_x,tilt_about_y)
-    
+            angular acceleration noise on each local plate axis (roll,pitch)
+
             args:
+                gx: measured roll acceleration (rad/s)
+                gy: measured pitch acceleration (rad/s)
                 dt: Time (s) passed since the last estimate (𝚫t)
+
+            See Estimation Structure notes for explanations of matrix calculations
             '''
-            a = dt * dt * dt * dt / 4
-            b = dt * dt * dt / 2
-            c = dt * dt
-            acc_var = 0 # TODO: the single axis acceleration variance of the model (for Q)
-            return acc_var * np.array([[a,0,b,0],
-                                    [0,a,0,b],
-                                    [b,0,c,0],
-                                    [0,b,0,c]])
+            # Variance from A
+            
+            # Variance matrix from B
+            
+            raise NotImplementedError
+    
     def update(self,ax,ay,az,gx,gy,gz,dt):
         self.A = self.get_tangent_scale(dt)
-        self.Q = self.get_guass_Q(dt)
+        self.B = self.get_gyro_shift(gx,gy,dt)
+        self.Q = self.get_guass_Q(gx, gy, dt)
