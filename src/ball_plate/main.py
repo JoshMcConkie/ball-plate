@@ -4,13 +4,13 @@ import cv2
 import numpy as np
 
 from ball_plate import control, cam_tools, serial_io
-from ball_plate.estimation.table_estimator import TableEstimator
+from ball_plate.estimation.table_estimator import PlateEstimator
 from ball_plate.estimation.ball_estimator import BallEstimator
-from ball_plate.config import BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
+from ball_plate.config import BALL_COLOR, BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
 
-from ball_plate.estimation.models import BallOnPlateModel, TableTiltModel
+from ball_plate.estimation.models import BallOnPlateModel, PlateModel
 from ball_plate.perception import ball, imu
-from ball_plate.state import TableState, BallState
+from ball_plate.state import PlateState, BallState
 
 # Linux wait key codes
 UP    = 65362
@@ -73,15 +73,16 @@ while True:
 
 cv2.destroyAllWindows()
 
-# ---Select table corners to calibrate px -> m mapping---
+
+#====Calibration camera px to plate meters coordinate map=====
 corner_pts = []
 
 def on_corner_click(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN and len(corner_pts) < 4:
         corner_pts.append((x, y))
 
-cv2.namedWindow("Select Corners")
-cv2.setMouseCallback("Select Corners", on_corner_click)
+cv2.namedWindow("Select Plate Corners")
+cv2.setMouseCallback("Select Plate Corners", on_corner_click)
 
 while True:
     ret0, frame0 = feed.read()
@@ -95,45 +96,50 @@ while True:
         cv2.circle(display, pt, 5, (0, 0, 255), -1)
     if len(corner_pts) >= 2:
         cv2.polylines(display, [np.array(corner_pts)], len(corner_pts) == 4, (0, 255, 255), 2)
-    cv2.imshow("Select Corners", display)
+    cv2.imshow("Select Plate Corners", display)
 
     key = cv2.waitKeyEx(1)
     if key == ord('r'):
         corner_pts.clear()
     elif key == ord(' ') and len(corner_pts) == 4:
         break
-
-ball.calibrate_coords(corner_pts)
-print(f"PX_TO_M_X: {ball.PX_TO_M_X}",
-      f"PX_TO_M_Y: {ball.PX_TO_M_Y}",
-      f"ORIGIN_PX: {ball.ORIGIN_PX}")
 cv2.destroyAllWindows()
 
-table_state = TableState(time.monotonic(),0,0,0,0)
+#====Initialize perception objects====
+
+coordinate_map = ball.CoordinateMap.from_corners(corner_pts)
+ball_detector = ball.BallDetector(coordinate_map, BALL_COLOR)
+imu_reader = imu.IMUReader(ser)
+
+plate_state = PlateState(time.monotonic(),0,0,0,0)
+
+#====Initialize measurement objects====
 imu_meas = None
 while imu_meas is None:
-    imu_meas = imu.measure(ser)
+    imu_meas = imu_reader.measure()
 
-
-# ---Main loop---
-ret, init_frame = feed.read()
+ret, frame = feed.read()
 if not ret:
     raise Exception("Failed to read initial frame")
-ball_meas = ball.measure(init_frame)
+ball_meas = ball_detector.measure(frame)
+
+#====Initialize state/command objects====
 ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0.0)
-system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
+system_state = control.get_system_state(ball_state,plate_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
+
+#====Initialize clock variables====
 log_timestamp = time.monotonic()
 last_imu_poll = time.monotonic()
 last_control = time.monotonic()
-frame = init_frame
 
 ball_model = BallOnPlateModel()
-table_model = TableTiltModel(feed)
+plate_model = PlateModel()
 
 ball_estimator = BallEstimator(BallOnPlateModel())
-table_estimator = TableEstimator(TableTiltModel(feed))
+plate_estimator = PlateEstimator(PlateModel())
 
+# ================Main loop=====================
 while True:
     now = time.monotonic()
 
@@ -141,17 +147,17 @@ while True:
     # Read IMU
     if now - last_imu_poll >= 1/IMU_HZ:
         last_imu_poll = now
-        new_imu = imu.measure(ser)
+        new_imu = imu_reader.measure()
         if new_imu is not None:
             imu_meas = new_imu
-            table_state = table_estimator.estimate_vanilla_acc_only(table_state, imu_meas)
+            plate_state = plate_estimator.estimate_vanilla_acc_only(plate_state, imu_meas)
 
     # Process Camera Feed
     if (time.monotonic() - ball_meas.timestamp) > 1/CAMERA_HZ:
         ret, frame = feed.read()
         if not ret:
             break
-        ball_meas = ball.measure(frame)
+        ball_meas = ball_detector.measure(frame)
 
     # ==State Estimate==
     # Only update from a fresh, valid (ball found) measurement; otherwise hold
@@ -162,7 +168,7 @@ while True:
     # ==Control==
     if now - last_control >= 1/CONTROL_HZ:
         last_control = now
-        system_state = control.get_system_state(ball_state,table_state,REFERENCE_STATE)
+        system_state = control.get_system_state(ball_state,plate_state,REFERENCE_STATE)
         control_cmd = control.get_command(system_state, REFERENCE_STATE)
         
         serial_io.send_packet(control_cmd, ser) # Send command to ESP32
@@ -172,7 +178,7 @@ while True:
         log_timestamp = time.monotonic()
         # print(f"Timestamp: {log_timestamp}\n", 
         #     f"Ball State: {ball_state}\n",
-        #     f"Table State: {table_state}\n", 
+        #     f"Plate State: {plate_state}\n", 
         #     f"Reference State: {REFERENCE_STATE}\n",
         #     f"Control Command: {control_cmd}\n")
         cv2.circle(frame, (ball_meas.x_px,ball_meas.y_px),
