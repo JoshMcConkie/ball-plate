@@ -13,7 +13,7 @@ CONTROL_HZ = 50
 SERIAL_HZ = 50
 DEBUG_HZ = 5
 
-COLOR_BALL = (0, 160, 255)
+BALL_COLOR = (0, 160, 255)
 
 TABLE_W_M = 0.22  # table width in meters (x)
 TABLE_H_M = 0.22  # table height in meters (y)
