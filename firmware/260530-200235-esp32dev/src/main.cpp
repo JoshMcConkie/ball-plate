@@ -28,6 +28,8 @@ String line;
 
 // timing
 unsigned long last_imu_ms = 0;
+constexpr int SEND_RATE_HZ = 200;
+constexpr int SEND_PERIOD_MS = 1000 / SEND_RATE_HZ;
 
 void setup() {
     Serial.begin(115200);
@@ -86,7 +88,7 @@ void loop() {
         }
     }
 
-    if (millis() - last_imu_ms >= 50) {
+    if (millis() - last_imu_ms >= 1000 / SEND_PERIOD_MS) {
         last_imu_ms = millis();
 
         // Send IMU state packet: ax ay az gx gy gz
