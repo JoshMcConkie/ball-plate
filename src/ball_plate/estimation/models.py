@@ -2,11 +2,12 @@
 Models for state estimation
 '''
 
-from typing import Any
 
+from numpy.typing import NDArray
 from cv2 import VideoCapture
 import numpy as np
-from numpy.typing import NDArray
+
+import imufusion
 
 from ball_plate.estimation import calibration
 
@@ -90,6 +91,16 @@ class BallOnPlateModel(LinearModel):
         self.A = self.get_tangent_scale(dt)
         self.B = self.get_tangent_shift(dt, tilt_about_x, tilt_about_y)
         self.Q = self.get_guass_Q(dt)
+
+
+
+class IMUFusionModel:
+    def __init__(self, imu_send_rate):
+        self.ahrs = imufusion.Ahrs()
+        self.ahrs.set_settings(
+            imufusion.AhrsSettings(sample_rate=imu_send_rate)
+        )
+
 
 
 """ Old IMU work

@@ -20,3 +20,5 @@ TABLE_H_M = 0.22  # table height in meters (y)
 
 SERVO_ARM_LENGTH = 0.023  # servo arm length in meters
 SERVO_CENTER_DEG = 90.0   # servo angle that holds the plate flat (firmware neutral)
+
+IMU_SEND_RATE = 200 # Hz. Matches value in esp32dev/src/main.cpp

@@ -5,11 +5,11 @@ import numpy as np
 
 from ball_plate import control, cam_tools, serial_io
 from ball_plate.estimation.calibration.tools import calibrate_ball
-from ball_plate.estimation.table_estimator import PlateEstimator
+from ball_plate.estimation.plate_estimator import PlateEstimator
 from ball_plate.estimation.ball_estimator import BallEstimator
-from ball_plate.config import BALL_COLOR, BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, REFERENCE_STATE, SERIAL_PORT
+from ball_plate.config import BALL_COLOR, BAUD_RATE, CAMERA_HZ, CONTROL_HZ, DEBUG_HZ, IMU_HZ, IMU_SEND_RATE, REFERENCE_STATE, SERIAL_PORT
 
-from ball_plate.estimation.models import BallOnPlateModel, PlateModel
+from ball_plate.estimation.models import BallOnPlateModel, IMUFusionModel
 from ball_plate.perception import ball, imu
 from ball_plate.state import PlateState, BallState
 
@@ -123,7 +123,7 @@ ball_cal = calibrate_ball(
 
 #====Initialize models objects====
 ball_model = BallOnPlateModel(acc_var=ball_cal.acc_var)
-plate_model = PlateModel()
+plate_model = IMUFusionModel(imu_send_rate=IMU_SEND_RATE)
 
 #====Initialize estimation objects====
 ball_estimator = BallEstimator(ball_model, meas_cov=ball_cal.meas_cov)
@@ -143,7 +143,7 @@ ball_meas = ball_detector.measure(frame)
 
 #====Initialize state/command objects====
 ball_state = BallState(ball_meas.timestamp, ball_meas.x_m, ball_meas.y_m, 0.0, 0.0)
-plate_state = PlateState(time.monotonic(),0,0,0,0)
+plate_state = PlateState(time.monotonic(),0,0)
 system_state = control.get_system_state(ball_state,plate_state,REFERENCE_STATE)
 control_cmd = control.get_command(system_state, REFERENCE_STATE)
 

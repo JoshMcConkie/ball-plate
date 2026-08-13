@@ -13,9 +13,7 @@ from typing import ClassVar
 from numpy.typing import NDArray
 
 @dataclass
-class IMUMeasurement:
-    H: ClassVar[NDArray[np.float64]] = np.identity(4) # table state -> measurement state
-                                                 
+class IMUMeasurement:                                                 
     timestamp: float
     ax: float
     ay: float
@@ -23,8 +21,18 @@ class IMUMeasurement:
     gx: float
     gy: float
     gz: float
-    def get_meas_vector(self):
-        return np.array([self.ax,self.ay,self.gx,self.gy,self.gz])
+
+    @property
+    def meas_vector(self):
+        return np.array([self.ax,self.ay,self.az,self.gx,self.gy,self.gz])
+
+    @property
+    def acc_vector(self):
+        return np.array([self.ax,self.ay,self.az])
+
+    @property
+    def gyro_vector(self):
+        return np.array([self.ax,self.ay,self.az])
 
 @dataclass
 class BallMeasurement:
@@ -45,8 +53,8 @@ class PlateState:
     timestamp: float
     tilt_about_x: float
     tilt_about_y: float
-    tilt_about_x_rate: float
-    tilt_about_y_rate: float
+    # tilt_about_x_rate: float
+    # tilt_about_y_rate: float
 
 @dataclass
 class BallState:
