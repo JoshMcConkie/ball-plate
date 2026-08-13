@@ -12,6 +12,7 @@ name = "ball-plate"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "imufusion" },
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "pandas" },
@@ -25,6 +26,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "imufusion", specifier = ">=1.3.2" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "opencv-python", specifier = ">=4.13.0.92" },
     { name = "pandas", specifier = ">=3.0.5" },
@@ -41,6 +43,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "imufusion"
+version = "1.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/77/34/0c7b236e2cd929abbdf0ed45629edb72a95e5326c4c9c6ff43b78fe802e1/imufusion-1.3.2.tar.gz", hash = "sha256:af94785e7334aa90b2d27c2b4e2e6a3d7fc6e594c5adc79a5878004465678d19", size = 22184, upload-time = "2026-07-20T15:24:12.948Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/c2/082049f8d384b420f14bb793dce68444d493e2c77a2e4398dffcd34ab73b/imufusion-1.3.2-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:e1a95f933c217e9614aed1f4190a3eb8de1289590d79d1a1ff2bc0ba028235a4", size = 18917, upload-time = "2026-07-20T15:24:03.937Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/07/9fc6ca7b68fea6f90cda44366a9dba1c5768fc07dccd90c4dd02112b2c3e/imufusion-1.3.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2d4b17e3a97d12a132c7602f637f858aaa4ddff8a0d30c73605632cec69f4d82", size = 18530, upload-time = "2026-07-20T15:24:04.902Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/73/b6f55b19b81c1724b680df6ced05fa0258604ab56f470c91a386a394c297/imufusion-1.3.2-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:9a1af9c3fcb8de604d0e798c4239720648697b9f10795e58616ba78d9f51668e", size = 61438, upload-time = "2026-07-20T15:24:05.802Z" },
+    { url = "https://files.pythonhosted.org/packages/73/6b/92353cfd5e06555f21c034452663aba6e6c855f6d43b25cdc14977b1890b/imufusion-1.3.2-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6f8199ef162498f46f5caa6c013f2013d232ce1422e92d5a253fc07cd248ae61", size = 59300, upload-time = "2026-07-20T15:24:06.793Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/9e/e4d6a6e886ee61cea58483c831aca931f3bed9372d6ac6ffbf6d5fad8a0b/imufusion-1.3.2-cp314-cp314-win_amd64.whl", hash = "sha256:f9393cc8026b35bb36ac6a6be727981f1ead22678d96a151279819e97f22d84b", size = 20800, upload-time = "2026-07-20T15:24:07.69Z" },
 ]
 
 [[package]]
