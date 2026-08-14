@@ -12,9 +12,9 @@ from ball_plate.perception import ball, imu
 
 import cv2
 
-@dataclass
+@dataclass(frozen=True)
 class BallCalibration:
-    meas_cov: np.ndarray  # continuous measurement covariance (R)
+    meas_cov: np.ndarray  # measurement covariance (R)
     acc_var: float # continuous acceleration variance (sigma_a)
 
            
@@ -54,10 +54,14 @@ def calibrate_ball(feed: cv2.VideoCapture,
 
     calib_period = data["time"].diff().mean()
     
-    meas_cov = (data[["x","y"]].cov()).to_numpy() / calib_period    # continuous measurement uncertainty (R)
+    meas_cov = (data[["x","y"]].cov()).to_numpy()    # measurement uncertainty (R)
 
     acc_var = 0.1 #TODO: sample for actual acc_var
     return BallCalibration(meas_cov=meas_cov, acc_var=acc_var)
+
+
+class IMUCalibration:
+
 
 """ Old IMU estimation
 def calibrate_imu(feed: cv2.VideoCapture, 
