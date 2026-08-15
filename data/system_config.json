@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "runtime": {
+    "rates_hz": {
+      "camera_capture": 60,
+      "imu_read": 100,
+      "state_estimation": 100,
+      "control": 50,
+      "servo_command": 50,
+      "debug_output": 5
+    }
+  },
+  "serial": {
+    "preferred_port": "/dev/ttyUSB0",
+    "baud_rate": 115200,
+    "timeout_s": 0.001
+  },
+  "camera": {
+    "device_id": 0,
+    "target_ball_color_hsv": [
+      0,
+      160,
+      255
+    ]
+  },
+  "reference": {
+    "x_goal": 0.0,
+    "y_goal": 0.0
+  },
+  "plate": {
+    "width_m": 0.22,
+    "height_m": 0.22
+  },
+  "controller": {
+    "kp": 100.0,
+    "ki": 4.0,
+    "kd": 40.0,
+    "derivative_filter_alpha": 0.8,
+    "max_tilt_deg": 10.0
+  },
+  "servos": {
+    "arm_length_m": 0.023,
+    "center_deg": 90.0,
+    "min_deg": 60.0,
+    "max_deg": 120.0,
+    "axes": {
+      "x": {
+        "gpio_pin": 32,
+        "min_pulse_us": 800,
+        "max_pulse_us": 2200
+      },
+      "y": {
+        "gpio_pin": 33,
+        "min_pulse_us": 800,
+        "max_pulse_us": 2200
+      }
+    }
+  },
+  "imu": {
+    "firmware_stream_rate_hz": 200
+  }
+}
