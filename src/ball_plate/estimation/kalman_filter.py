@@ -48,7 +48,7 @@ class KalmanFilter:
         output:
             4x1 weighted model-measurement state estimate
         '''
-        K = self.P @ H.T @ np.linalg.inv(H @ self.P @ H.T + meas_cov)
+        K = self.P_minus @ H.T @ np.linalg.inv(H @ self.P_minus @ H.T + meas_cov)
         self.state_est = self.state_est_minus + K @ (meas - self.state_est_minus)
         self.state_est_prev = self.state_est
         self.P = (np.identity(self.P.shape[0]) - K @ H) @ self.P_minus
