@@ -88,3 +88,6 @@ class ControlCommand:
     def get_cmd_str(self):
         return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n"
 
+    def encode(self,encoding: str = "utf-8", errors: str = "strict") -> bytes:
+        return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n".encode(encoding,errors)
+
