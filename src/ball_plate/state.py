@@ -12,6 +12,8 @@ from typing import ClassVar
 
 from numpy.typing import NDArray
 
+from ball_plate.config import ReferenceConfig
+
 @dataclass
 class IMUMeasurement:                                                 
     timestamp: float
@@ -73,9 +75,12 @@ class SystemState:
 
 @dataclass
 class ReferenceState:
-    timestamp: float
     x_goal: float
     y_goal: float
+
+    @classmethod
+    def from_config(cls, config: ReferenceConfig):
+        return ReferenceState(config.x_goal, config.x_goal)
 
 @dataclass
 class ControlCommand:

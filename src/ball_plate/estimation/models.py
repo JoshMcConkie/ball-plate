@@ -9,8 +9,6 @@ import numpy as np
 
 import imufusion
 
-from ball_plate.estimation import calibration
-
 class LinearModel:
     '''Recursive model of the form X_pred = A@X + B with noise covariance Q.
 

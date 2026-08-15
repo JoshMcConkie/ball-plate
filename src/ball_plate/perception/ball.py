@@ -5,54 +5,13 @@ import cv2
 from cv2 import COLOR_BGR2GRAY, COLOR_BGR2HSV, GaussianBlur, VideoCapture, cvtColor
 from cv2.typing import MatLike
 
-from ball_plate.config import CAM_ID, BALL_COLOR, TABLE_W_M, TABLE_H_M
+from ball_plate.camera import Camera
 from ball_plate.state import BallMeasurement
 
-@dataclass(frozen=True)
-class CoordinateMap:
-    px_to_m_x: float
-    px_to_m_y: float
-    origin_px_x: int
-    origin_px_y: int
-
-    @staticmethod
-    def from_corners(corner_pts:list[tuple[int, int]])->CoordinateMap:
-        '''Compute px->m scales and table-center origin from the 4 clicked table corners.
-        Corners may be clicked in any order.'''
-
-        pts = np.array(corner_pts, dtype=np.float32)
-        # Order corners TL, TR, BR, BL: TL has min(x+y), BR has max(x+y),
-        # TR has min(y-x), BL has max(y-x)
-        s = pts.sum(axis=1)
-        d = np.diff(pts, axis=1).ravel()  # y - x
-        tl = pts[np.argmin(s)]
-        br = pts[np.argmax(s)]
-        tr = pts[np.argmin(d)]
-        bl = pts[np.argmax(d)]
-
-        width_px = float((np.linalg.norm(tr - tl) + np.linalg.norm(br - bl)) / 2.0)
-        height_px = float((np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2.0)
-
-        cx, cy = pts.mean(axis=0)   
-        return CoordinateMap(TABLE_W_M / width_px,
-                             TABLE_H_M / height_px,
-                             cx,
-                             cy)
-    
-
-def init_camera():
-    cam = cv2.VideoCapture(CAM_ID, cv2.CAP_V4L2)
-    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    return cam
-
 class BallDetector:
-    def __init__(self,
-                 coord_map: CoordinateMap,
-                 color: tuple[int,int,int]
-                 ):
-        self.map = coord_map
-        self.color = color
+    def __init__(self, camera: Camera):
+        self.map = camera.px_to_meter_map
+        self.color = camera.target_ball_color_hsv
         self.last_meas = BallMeasurement(0,0,0,0,0,0,False) # initial dummy measurement
 
     def _build_contour_mask(self, frame: MatLike)-> MatLike:
@@ -79,6 +38,7 @@ class BallDetector:
         return None
 
     def px_to_meter(self,x_px: int, y_px: int)->tuple[float,float]:
+        assert self.map is not None
         # Image rows increase downward, so negate to make +y point up.
         x = (x_px - self.map.origin_px_x) * self.map.px_to_m_x
         y = (self.map.origin_px_y - y_px) * self.map.px_to_m_y
