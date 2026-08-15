@@ -6,6 +6,7 @@ from ball_plate.estimation.kalman_filter import KalmanFilter
 from ball_plate.estimation.models import BallOnPlateModel
 from ball_plate.state import BallMeasurement, BallState, PlateState
 
+
 class BallEstimator:
     def __init__(self, model: BallOnPlateModel, meas_cov: np.ndarray):
         self.model = model

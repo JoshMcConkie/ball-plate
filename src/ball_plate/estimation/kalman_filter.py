@@ -1,8 +1,9 @@
+
 import numpy as np
-from collections.abc import Callable
 from numpy.typing import NDArray
 
 from ball_plate.estimation.models import LinearModel
+
 
 class KalmanFilter:
     '''

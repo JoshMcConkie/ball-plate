@@ -1,12 +1,13 @@
-from dataclasses import dataclass
 import time
-import numpy as np
+
 import cv2
-from cv2 import COLOR_BGR2GRAY, COLOR_BGR2HSV, GaussianBlur, VideoCapture, cvtColor
+import numpy as np
+from cv2 import COLOR_BGR2HSV, cvtColor
 from cv2.typing import MatLike
 
 from ball_plate.camera import Camera
 from ball_plate.state import BallMeasurement
+
 
 class BallDetector:
     def __init__(self, camera: Camera):

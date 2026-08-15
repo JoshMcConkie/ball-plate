@@ -1,6 +1,8 @@
-from math import sin, asin, radians, degrees
+from math import asin, degrees, radians, sin
+
 from ball_plate.config import ControllerConfig, PlateConfig, ServoConfig
 from ball_plate.state import *
+
 
 class ServoController:
     def __init__(self, controller_config: ControllerConfig,
@@ -43,8 +45,7 @@ class ServoController:
             dt = 0.0
         else:
             dt = system.timestamp - self._last_timestamp
-            if dt <= 0.0:
-                dt = 0.0
+            dt = max(0.0, dt)
         self._last_timestamp = system.timestamp
         self._integral_x += error_x * dt
         self._integral_y += error_y * dt

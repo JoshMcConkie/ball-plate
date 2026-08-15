@@ -1,12 +1,13 @@
 
-from dataclasses import dataclass
 import subprocess
+from dataclasses import dataclass
 from time import time
 
 import cv2
 import numpy as np
 
 from ball_plate.config import CameraConfig, PlateConfig
+
 
 @dataclass(frozen=True)
 class CoordinateMap:

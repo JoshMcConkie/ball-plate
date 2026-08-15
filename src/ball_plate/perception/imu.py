@@ -7,6 +7,7 @@ from ball_plate import serial_tools
 from ball_plate.calibration import IMUCalibration
 from ball_plate.state import IMUMeasurement
 
+
 class IMUReader:
     def __init__(self, serial_io: serial_tools.SerialIO, imu_calibration: IMUCalibration):
         self.serial_io = serial_io

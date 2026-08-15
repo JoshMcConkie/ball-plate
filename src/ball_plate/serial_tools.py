@@ -6,6 +6,7 @@ from serial.tools import list_ports
 from ball_plate.config import SerialConfig
 from ball_plate.state import ControlCommand
 
+
 class SerialIO:
     def __init__(self, serial_config: SerialConfig):
         self.preferred_port = serial_config.preferred_port
@@ -65,7 +66,7 @@ class SerialIO:
             assert self.ser is not None
             self.ser.write(control_cmd.encode('utf-8'))
             # print(packet)
-        except AssertionError as e:
+        except AssertionError:
             print("Please begin serial using the .begin() method")
             return False
         except Exception as e:
@@ -83,7 +84,7 @@ class SerialIO:
             if len(values) != 6:
                 raise ValueError(f"Expected 6 IMU values, got {len(values)}: {echo!r}")
             return values
-        except AssertionError as e:
+        except AssertionError:
             print("Please begin serial using the .begin() method")
             return None
         except Exception as e:

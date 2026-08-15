@@ -2,18 +2,17 @@
 Tools to initiate uncertainty matrices (the Q in P^- = AP^A.T + Q)
 '''
 
+import json
 from dataclasses import dataclass
 from time import time
+
+import cv2
 import numpy as np
 import pandas as pd
-from serial import Serial
 from scipy.spatial.transform import Rotation
-import cv2
-import json
 
-from ball_plate import serial_tools
 from ball_plate.camera import Camera
-from ball_plate.perception import ball, imu
+from ball_plate.perception import ball
 
 
 @dataclass(frozen=True)
@@ -36,7 +35,7 @@ class BallCalibration:
     def load_calibration(cls):
         try:
             data = pd.read_csv("data/calibration/ball/calibration.json")
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             raise FileNotFoundError("No previous calibration file 'data/calibration/ball/calibration.json' exists.")
 
 class BallCalibrator:
@@ -123,7 +122,7 @@ class IMUCalibration:
     def load_calibration(cls):
         try:
             data = pd.read_csv("data/calibration/imu/calibration.json")
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             raise FileNotFoundError("No previous calibration file 'data/calibration/imu/calibration.json' exists.")
 
 

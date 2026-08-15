@@ -1,10 +1,10 @@
-from math import atan2, sqrt, pi, hypot
 import time
+from math import atan2, hypot, pi
 
 import imufusion
 import numpy as np
-from ball_plate.estimation.kalman_filter import KalmanFilter
-from ball_plate.estimation.models import IMUFusionModel, LinearModel
+
+from ball_plate.estimation.models import IMUFusionModel
 from ball_plate.state import IMUMeasurement, PlateState
 
 

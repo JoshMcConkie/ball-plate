@@ -7,12 +7,13 @@ SystemState     → controller → ControlCommand
 
 '''
 from dataclasses import dataclass
-import numpy as np
 from typing import ClassVar
 
+import numpy as np
 from numpy.typing import NDArray
 
 from ball_plate.config import ReferenceConfig
+
 
 @dataclass
 class IMUMeasurement:                                                 

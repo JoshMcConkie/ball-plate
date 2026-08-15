@@ -3,11 +3,10 @@ Models for state estimation
 '''
 
 
-from numpy.typing import NDArray
-from cv2 import VideoCapture
-import numpy as np
-
 import imufusion
+import numpy as np
+from numpy.typing import NDArray
+
 
 class LinearModel:
     '''Recursive model of the form X_pred = A@X + B with noise covariance Q.
