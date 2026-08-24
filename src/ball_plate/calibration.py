@@ -151,13 +151,16 @@ class IMUCalibration:
         
         with save_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+        print(f"Saved calibration to {save_path}")
 
     @classmethod
-    def load(
+    def _load(
         cls,
         load_path: str | Path,
     ) -> "IMUCalibration":
         load_path = Path(load_path)
+
+        print(f"Loading Calibration at {load_path}")
 
         try:
             with load_path.open(encoding="utf-8") as f:
@@ -189,6 +192,19 @@ class IMUCalibration:
                 f"Invalid IMU calibration in {load_path}: {exc}"
             ) from exc
 
+    @classmethod
+    def load(
+        cls,
+        load_path: str | Path,
+    ) -> "IMUCalibration":
+        load_path = Path(load_path)
+
+        print(f"Loading Calibration at {load_path}")
+        calibration = cls._load(load_path)
+        print("Calibration loaded.")
+
+        return calibration
+        
 class IMUCalibrator:
     def __init__(self, controller, serial_io,
                  sample_freq=150,
@@ -215,24 +231,44 @@ class IMUCalibrator:
                                             "az","gx","gy","gz"]).dropna()
 
     def calibrate(self, save_path: str | Path) -> IMUCalibration:
+        print("Calibrating IMU...")
+
         max_tilt_rad = np.deg2rad(self.controller.max_tilt_deg)
         expected_max_tilt_sin = np.sin(max_tilt_rad)
         expected_max_tilt_cos = np.cos(max_tilt_rad)
 
         max_xy_tilt_cmds = self.controller.max_tilt_cmds
 
-        # Collect samples
+        # Collect samples at center position
+        print(
+            "   Collecting samples at: "
+            f"x={max_xy_tilt_cmds[0].tilt_about_x_deg:.2f} deg, "
+            f"y={max_xy_tilt_cmds[0].tilt_about_y_deg:.2f} deg"
+        )
         center_cmd = self.controller.center_cmd
         self.serial_io.send_packet(center_cmd)
         time.sleep(1)
         center_data = self.collect_data()
         center_data.to_csv("data/calibration/imu/raw/level.csv")
 
+        # Collect samples at x position
+        print(
+            "   Collecting samples at: "
+            f"x={max_xy_tilt_cmds[0].tilt_about_x_deg:.2f} deg, "
+            f"y={max_xy_tilt_cmds[0].tilt_about_y_deg:.2f} deg"
+        )
+
         self.serial_io.send_packet(max_xy_tilt_cmds[0])
         time.sleep(1)
         x_data = self.collect_data()
         x_data.to_csv("data/calibration/imu/raw/x_tilt.csv")
 
+        # Collect samples at x position
+        print(
+            "   Collecting samples at: "
+            f"x={max_xy_tilt_cmds[1].tilt_about_x_deg:.2f} deg, "
+            f"y={max_xy_tilt_cmds[1].tilt_about_y_deg:.2f} deg"
+        )
         self.serial_io.send_packet(max_xy_tilt_cmds[1])
         time.sleep(1)
         y_data = self.collect_data()
@@ -243,6 +279,10 @@ class IMUCalibrator:
         exp_cen_acc_unit_vector = np.array([0.0,0.0,-1.0])
         exp_x_acc_unit_vector = np.array([0, expected_max_tilt_sin, - expected_max_tilt_cos])
         exp_y_acc_unit_vector = np.array([expected_max_tilt_sin,0, - expected_max_tilt_cos])
+
+        print(center_data.describe())
+        print(x_data.describe())
+        print(y_data.describe())
 
         imu_cen_acc_vector = center_data[["ax","ay","az"]].mean().to_numpy()
         imu_x_acc_vector = x_data[["ax","ay","az"]].mean().to_numpy()
@@ -259,25 +299,48 @@ class IMUCalibrator:
         np.linalg.det(rot_matrix)
 
         # check that the rotation matrix is valid
-        assert np.allclose(np.linalg.det(rot_matrix),1.0)
-        assert np.allclose(rot_matrix @ rot_matrix.T, np.eye(3))
-
-        # rot_center_data = rotation.apply(center_data[["ax","ay","az"]].to_numpy())
-        # rot_x_data = rotation.apply(x_data[["ax","ay","az"]].to_numpy())
-        # rot_y_data = rotation.apply(y_data[["ax","ay","az"]].to_numpy())
+        np.testing.assert_allclose(
+            np.linalg.det(rot_matrix),
+            1.0,
+            rtol=1e-5,
+            atol=1e-8,
+        )
+        np.testing.assert_allclose(
+            rot_matrix @ rot_matrix.T,
+            np.eye(3),
+            rtol=1e-5,
+            atol=1e-8,
+        )
 
         rot_cen_vector = rotation.apply(imu_cen_acc_unit_vector)
         rot_x_vector = rotation.apply(imu_x_acc_unit_vector)
         rot_y_vector = rotation.apply(imu_y_acc_unit_vector)
 
-        assert np.allclose(rot_cen_vector,exp_cen_acc_unit_vector)
-        assert np.allclose(rot_x_vector,exp_x_acc_unit_vector)
-        assert np.allclose(rot_y_vector,exp_y_acc_unit_vector)
+        # assert the final calibrated force vector is close to the expected.
+        np.testing.assert_allclose(
+            rot_cen_vector,
+            exp_cen_acc_unit_vector,
+            rtol=1e-5,
+            atol=1e-8,
+        )
+        np.testing.assert_allclose(
+            rot_x_vector,
+            exp_x_acc_unit_vector,
+            rtol=1e-5,
+            atol=1e-8,
+        )
+        np.testing.assert_allclose(
+            rot_y_vector,
+            exp_y_acc_unit_vector,
+            rtol=1e-5,
+            atol=1e-8,
+        )
 
         calibration = IMUCalibration(
             alignment_matrix=rot_matrix
         )
 
         calibration.save(save_path)
+        print("Calibration finished.")
 
         return calibration

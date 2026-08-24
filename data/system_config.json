@@ -41,8 +41,8 @@
   "servos": {
     "arm_length_m": 0.023,
     "center_deg": 90.0,
-    "min_deg": 60.0,
-    "max_deg": 120.0,
+    "min_deg": 30.0,
+    "max_deg": 150.0,
     "axes": {
       "x": {
         "gpio_pin": 32,
