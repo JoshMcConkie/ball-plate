@@ -88,7 +88,7 @@ void loop() {
         }
     }
 
-    if (millis() - last_imu_ms >= 1000 / SEND_PERIOD_MS) {
+    if (millis() - last_imu_ms >= SEND_PERIOD_MS) {
         last_imu_ms = millis();
 
         // Send IMU state packet: ax ay az gx gy gz

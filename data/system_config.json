@@ -13,7 +13,7 @@
   "serial": {
     "preferred_port": "/dev/ttyUSB0",
     "baud_rate": 115200,
-    "timeout_s": 0.001
+    "timeout_s": 0.01
   },
   "camera": {
     "device_id": 0,

@@ -1,3 +1,4 @@
+import math
 import time
 
 from serial import Serial
@@ -11,8 +12,10 @@ class SerialIO:
     def __init__(self, serial_config: SerialConfig):
         self.preferred_port = serial_config.preferred_port
         self.baud_rate = serial_config.baud_rate
-        self.timeout_s = self.timeout_s
+        self.timeout_s = serial_config.timeout_s
         self.ser: Serial | None = None
+        self._rx_buffer = bytearray()
+        self._discarded_lines = 0
             
             
 
@@ -56,11 +59,21 @@ class SerialIO:
         self.ser = self.open_serial()
         print("Serial connected on:", self.ser.port)
         time.sleep(2)
-        banner = self.ser.readline().decode(errors='ignore').strip()
-        print("Banner:", banner)
+        self.ser.reset_input_buffer()
+        self._rx_buffer.clear()
+
+
+    def _report_discarded_line(self, line: str) -> None:
+        self._discarded_lines += 1
+
+        if self._discarded_lines <= 3 or self._discarded_lines % 100 == 0:
+            print(
+                f"Ignoring malformed serial line #{self._discarded_lines}: "
+                f"{line!r}"
+            )
         
 
-    def send_packet(self,control_cmd: ControlCommand | str)->bool:
+    def send_packet(self,control_cmd: ControlCommand)->bool:
         # build a packet
         try: # send/recieve from esp32 through serial
             assert self.ser is not None
@@ -77,16 +90,44 @@ class SerialIO:
     def fetch_values(self)->list[float] | None:
         try: # send/recieve from esp32 through serial
             assert self.ser is not None
-            echo = self.ser.readline().decode(errors="ignore").strip()
-            if not echo:
-                return None # no complete line available yet, not an error
-            values = list(map(float, echo.split()))
-            if len(values) != 6:
-                raise ValueError(f"Expected 6 IMU values, got {len(values)}: {echo!r}")
-            return values
-        except AssertionError:
-            print("Please begin serial using the .begin() method")
-            return None
-        except Exception as e:
-            print("Serial read failed: ", e)
+            chunk = self.ser.read(self.ser.in_waiting or 1)
+            if chunk:
+                self._rx_buffer.extend(chunk)
+            newest_values: list[float] | None = None
+
+            while True:
+                newline_index = self._rx_buffer.find(b'\n')
+                if newline_index == -1:
+                    break
+                raw_line = bytes(self._rx_buffer[:newline_index + 1])
+                del self._rx_buffer[:newline_index + 1]
+                line = raw_line.decode(errors="ignore").strip()
+                if not line:
+                    continue
+                fields = line.split()
+                if len(fields) != 6:
+                    self._report_discarded_line(line)
+                    continue
+
+                try:
+                    values = [float(field) for field in fields]
+
+                except ValueError:
+                    self._report_discarded_line(line)
+                    continue
+
+                if not all(math.isfinite(value) for value in values):
+                    self._report_discarded_line(line)
+                    continue
+
+                newest_values = values
+
+            if len(self._rx_buffer) > 4096:
+                self._rx_buffer.clear()
+                print("Serial receive buffer reset: no newline within 4096 bytes")
+
+            return newest_values
+
+        except Exception as exc:
+            print("Serial read failed:", exc)
             return None
