@@ -58,5 +58,11 @@
   },
   "imu": {
     "firmware_stream_rate_hz": 200
+  },
+  "calibration": {
+    "ball_load_path": "data/calibration/ball/calibration.json",
+    "imu_load_path": "data/calibration/imu/calibration.json",
+    "ball_save_path": "data/calibration/ball/calibration.json",
+    "imu_save_path": "data/calibration/imu/calibration.json"
   }
 }

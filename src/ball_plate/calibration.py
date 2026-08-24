@@ -4,7 +4,8 @@ Tools to initiate uncertainty matrices (the Q in P^- = AP^A.T + Q)
 
 import json
 from dataclasses import dataclass
-from time import time
+from pathlib import Path
+import time
 
 import cv2
 import numpy as np
@@ -12,7 +13,9 @@ import pandas as pd
 from scipy.spatial.transform import Rotation
 
 from ball_plate.camera import Camera
+from ball_plate.control import ServoController
 from ball_plate.perception import ball
+from ball_plate.serial_tools import SerialIO
 
 
 @dataclass(frozen=True)
@@ -21,22 +24,52 @@ class BallCalibration:
     #TODO: calibrate acceleration variance
     acc_var: float = 0.1 # continuous acceleration variance (sigma_a)
 
-    def save(self):
+    def save(self, save_path: str | Path) -> None:
+        save_path = Path(save_path)
         data = {
             "version": 1,
             "meas_cov": self.meas_cov.tolist(),
             "acc_var": self.acc_var
         }
             
-        with open("data/calibration/ball/calibration.json") as f:
+        with save_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
     @classmethod
-    def load_calibration(cls):
+    def load(
+        cls,
+        load_path: str | Path,
+    ) -> "BallCalibration":
+        load_path = Path(load_path)
+
         try:
-            data = pd.read_csv("data/calibration/ball/calibration.json")
-        except FileNotFoundError:
-            raise FileNotFoundError("No previous calibration file 'data/calibration/ball/calibration.json' exists.")
+            with load_path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Ball calibration not found: {load_path}"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Invalid JSON in {load_path}: line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
+
+        if data.get("version") != 1:
+            raise RuntimeError(
+                f"Unsupported ball calibration version: "
+                f"{data.get('version')!r}"
+            )
+
+        try:
+            return cls(
+                meas_cov=np.asarray(data["meas_cov"], dtype=float),
+                acc_var=data["acc_var"],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                f"Invalid ball calibration in {load_path}: {exc}"
+            ) from exc
 
 class BallCalibrator:
     def __init__(self,camera: Camera, ball_detector: ball.BallDetector) -> None:
@@ -61,7 +94,7 @@ class BallCalibrator:
                     i += 1
         return pd.DataFrame(history, columns=["time","px","py"])
            
-    def calibrate(self)->BallCalibration:
+    def calibrate(self, save_path: str | Path) -> BallCalibration:
         assert self.ball_detector.map is not None
         ## Prompt user to place the ball before calibration
         while True:
@@ -100,7 +133,7 @@ class BallCalibrator:
         meas_cov = (data[["x","y"]].cov()).to_numpy()    # measurement uncertainty (R)
 
         calibration = BallCalibration(meas_cov=meas_cov)
-        calibration.save()
+        calibration.save(save_path)
         
         return calibration
 
@@ -109,31 +142,61 @@ class BallCalibrator:
 class IMUCalibration:
     alignment_matrix: np.ndarray
 
-    def save(self):
+    def save(self, save_path: str | Path) -> None:
+        save_path = Path(save_path)
         data = {
             "version": 1,
             "alignment_matrix": self.alignment_matrix.tolist()
         }
         
-        with open("data/calibration/imu/calibration.json") as f:
+        with save_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
     @classmethod
-    def load_calibration(cls):
-        try:
-            data = pd.read_csv("data/calibration/imu/calibration.json")
-        except FileNotFoundError:
-            raise FileNotFoundError("No previous calibration file 'data/calibration/imu/calibration.json' exists.")
+    def load(
+        cls,
+        load_path: str | Path,
+    ) -> "IMUCalibration":
+        load_path = Path(load_path)
 
+        try:
+            with load_path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"IMU calibration not found: {load_path}"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Invalid JSON in {load_path}: line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
+
+        if data.get("version") != 1:
+            raise RuntimeError(
+                f"Unsupported IMU calibration version: "
+                f"{data.get('version')!r}"
+            )
+
+        try:
+            return cls(
+                alignment_matrix=np.asarray(
+                    data["alignment_matrix"], dtype=float
+                )
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                f"Invalid IMU calibration in {load_path}: {exc}"
+            ) from exc
 
 class IMUCalibrator:
     def __init__(self, controller, serial_io,
                  sample_freq=150,
                  sample_count=300,):
-        self.controller = controller
-        self.serial_io = serial_io
-        self.sample_count = sample_count
-        self.sample_freq = sample_freq
+        self.controller: ServoController = controller
+        self.serial_io: SerialIO = serial_io
+        self.sample_count: int = sample_count
+        self.sample_freq: float = sample_freq
         
             
     def collect_data(self)->pd.DataFrame:
@@ -143,7 +206,7 @@ class IMUCalibrator:
         while i < self.sample_count:
             t = time.monotonic()
             while t - t_last > 1 / self.sample_freq:
-                values = self.serial_io.fetch_values(self.serial_io)
+                values = self.serial_io.fetch_values()
                 if values is not None:
                     t_last = time.monotonic()
                     history.append((t_last,*values))
@@ -151,31 +214,33 @@ class IMUCalibrator:
         return pd.DataFrame(history, columns=["time","ax","ay",
                                             "az","gx","gy","gz"]).dropna()
 
-    def calibrate(self)->IMUCalibration:
+    def calibrate(self, save_path: str | Path) -> IMUCalibration:
         max_tilt_rad = np.deg2rad(self.controller.max_tilt_deg)
         expected_max_tilt_sin = np.sin(max_tilt_rad)
         expected_max_tilt_cos = np.cos(max_tilt_rad)
 
+        max_xy_tilt_cmds = self.controller.max_tilt_cmds
+
         # Collect samples
-        self.controller.center_servos()
+        center_cmd = self.controller.center_cmd
+        self.serial_io.send_packet(center_cmd)
         time.sleep(1)
         center_data = self.collect_data()
         center_data.to_csv("data/calibration/imu/raw/level.csv")
 
-
-        self.controller.xmax_ycenter()
+        self.serial_io.send_packet(max_xy_tilt_cmds[0])
         time.sleep(1)
         x_data = self.collect_data()
         x_data.to_csv("data/calibration/imu/raw/x_tilt.csv")
 
-        self.controller.xcenter_ymax()
+        self.serial_io.send_packet(max_xy_tilt_cmds[1])
         time.sleep(1)
         y_data = self.collect_data()
         y_data.to_csv("data/calibration/imu/raw/y_tilt.csv")
         
-        self.controller.center_servos()
+        self.serial_io.send_packet(center_cmd)
 
-        exp_cen_acc_unit_vector = np.array([0,0,1])
+        exp_cen_acc_unit_vector = np.array([0.0,0.0,-1.0])
         exp_x_acc_unit_vector = np.array([0, expected_max_tilt_sin, - expected_max_tilt_cos])
         exp_y_acc_unit_vector = np.array([expected_max_tilt_sin,0, - expected_max_tilt_cos])
 
@@ -194,8 +259,8 @@ class IMUCalibrator:
         np.linalg.det(rot_matrix)
 
         # check that the rotation matrix is valid
-        assert np.isclose(np.linalg.det(rot_matrix),1.0)
-        assert np.isclose(rot_matrix @ rot_matrix.T, np.eye(3))
+        assert np.allclose(np.linalg.det(rot_matrix),1.0)
+        assert np.allclose(rot_matrix @ rot_matrix.T, np.eye(3))
 
         # rot_center_data = rotation.apply(center_data[["ax","ay","az"]].to_numpy())
         # rot_x_data = rotation.apply(x_data[["ax","ay","az"]].to_numpy())
@@ -205,14 +270,14 @@ class IMUCalibrator:
         rot_x_vector = rotation.apply(imu_x_acc_unit_vector)
         rot_y_vector = rotation.apply(imu_y_acc_unit_vector)
 
-        assert np.isclose(rot_cen_vector,exp_cen_acc_unit_vector)
-        assert np.isclose(rot_x_vector,exp_x_acc_unit_vector)
-        assert np.isclose(rot_y_vector,exp_y_acc_unit_vector)
+        assert np.allclose(rot_cen_vector,exp_cen_acc_unit_vector)
+        assert np.allclose(rot_x_vector,exp_x_acc_unit_vector)
+        assert np.allclose(rot_y_vector,exp_y_acc_unit_vector)
 
         calibration = IMUCalibration(
             alignment_matrix=rot_matrix
         )
 
-        calibration.save()
+        calibration.save(save_path)
 
         return calibration

@@ -17,6 +17,7 @@ controller = control.ServoController(controller_config=config.controller,
                              plate_config=config.plate, servo_config=config.servos)
 
 serial_io = serial_tools.SerialIO(serial_config=config.serial)
+serial_io.begin()
 
 camera = camera.Camera(camera_config=config.camera)
 camera.calibrate(config.plate)
@@ -28,15 +29,21 @@ reference_state = ReferenceState.from_config(config.reference)
 #====Calibrate objects for perception and filtering====
 
 imu_calibration = IMUCalibrator(controller=controller, serial_io=serial_io,
-                               sample_freq=150, sample_count=300).calibrate()
+                               sample_freq=150, sample_count=300).calibrate(
+                                   config.calibration.imu_save_path
+                               )
 imu_reader = imu.IMUReader(serial_io,imu_calibration)
 
 ball_detector = ball.BallDetector(camera)
-ball_calibration = BallCalibrator(camera=camera, ball_detector=ball_detector).calibrate()
+ball_calibration = BallCalibrator(
+    camera=camera,
+    ball_detector=ball_detector,
+).calibrate(config.calibration.ball_save_path)
 
 #====Initialize models objects====
 ball_model = BallOnPlateModel(acc_var=ball_calibration.acc_var)
-plate_model = IMUFusionModel(imu_send_rate=200) #TODO: implement IMUConfig Class
+plate_model = IMUFusionModel(
+    imu_send_rate=config.imu.firmware_stream_rate_hz)
 
 #====Initialize estimation objects====
 ball_estimator = BallEstimator(ball_model, meas_cov=ball_calibration.meas_cov)

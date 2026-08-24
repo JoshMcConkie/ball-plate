@@ -55,6 +55,20 @@ class ReferenceConfig:
     x_goal: float
     y_goal: float
 
+
+@dataclass(frozen=True, slots=True)
+class IMUConfig:
+    firmware_stream_rate_hz: int
+
+
+@dataclass(frozen=True, slots=True)
+class CalibrationConfig:
+    ball_load_path: Path
+    imu_load_path: Path
+    ball_save_path: Path
+    imu_save_path: Path
+
+
 @dataclass(frozen=True, slots=True)
 class SystemConfig:
     controller: ControllerConfig
@@ -64,6 +78,8 @@ class SystemConfig:
     camera: CameraConfig
     reference: ReferenceConfig
     runtime: RuntimeConfig
+    imu: IMUConfig
+    calibration: CalibrationConfig
 
     
 
@@ -100,6 +116,7 @@ def load_system_config(
 
     try:
         servo_data = data["servos"]
+        calibration_data = data["calibration"]
 
         ServoConfig(
             arm_length_m=servo_data["arm_length_m"],
@@ -119,6 +136,13 @@ def load_system_config(
                 max_deg=data["servos"]["max_deg"],
             ),
             reference=ReferenceConfig(**data["reference"]),
+            imu=IMUConfig(**data["imu"]),
+            calibration=CalibrationConfig(
+                ball_load_path=Path(calibration_data["ball_load_path"]),
+                imu_load_path=Path(calibration_data["imu_load_path"]),
+                ball_save_path=Path(calibration_data["ball_save_path"]),
+                imu_save_path=Path(calibration_data["imu_save_path"]),
+            ),
             runtime=RuntimeConfig(
                 rates_hz=RuntimeRatesConfig(**data["runtime"]["rates_hz"])
             )
