@@ -81,7 +81,7 @@ class ReferenceState:
 
     @classmethod
     def from_config(cls, config: ReferenceConfig):
-        return ReferenceState(config.x_goal, config.x_goal)
+        return cls(config.x_goal, config.y_goal)
 
 @dataclass
 class ControlCommand:

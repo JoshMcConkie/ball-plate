@@ -1,4 +1,5 @@
 from math import asin, degrees, radians, sin
+import time
 
 from ball_plate.config import ControllerConfig, PlateConfig, ServoConfig
 from ball_plate.state import *
@@ -15,6 +16,7 @@ class ServoController:
         self.max_integral = self.max_tilt_deg / self.ki
         self.servo_config = servo_config
         self.plate = plate_config
+        self.reset()
 
     def reset(self)->None:
         self._previous_error_x: float | None = None
@@ -36,17 +38,43 @@ class ServoController:
         servoy_deg = self.servo_config.center_deg + degrees(asin(max(-1.0, min(1.0, arg_y))))
         return servox_deg, servoy_deg
 
+    def command_for_tilt(self,tilt_about_x_deg: float,
+                        tilt_about_y_deg: float ) -> ControlCommand:
+        tilt_about_x_deg = max(
+            -self.max_tilt_deg,
+            min(self.max_tilt_deg, tilt_about_x_deg),
+        )
+        tilt_about_y_deg = max(
+            -self.max_tilt_deg,
+            min(self.max_tilt_deg, tilt_about_y_deg),
+        )
+        servox_deg, servoy_deg = self.get_servo_angles(
+            tilt_about_x_deg,
+            tilt_about_y_deg)
+
+        servox_deg = max(
+            self.servo_config.min_deg,
+            min(self.servo_config.max_deg, servox_deg))
+        servoy_deg = max(
+            self.servo_config.min_deg,
+            min(self.servo_config.max_deg, servoy_deg))
+
+        return ControlCommand(
+            time.monotonic(),
+            tilt_about_x_deg,tilt_about_y_deg,
+            servox_deg, servoy_deg)
 
     def get_command(self,system: SystemState, ref: ReferenceState)->ControlCommand:
         error_x = ref.x_goal - system.ball.x
         error_y = ref.y_goal - system.ball.y
 
+        current_stamp = time.monotonic()
+
         if self._last_timestamp is None:
             dt = 0.0
         else:
-            dt = system.timestamp - self._last_timestamp
-            dt = max(0.0, dt)
-        self._last_timestamp = system.timestamp
+            dt = max(0.0, current_stamp - self._last_timestamp)
+        self._last_timestamp = current_stamp
         self._integral_x += error_x * dt
         self._integral_y += error_y * dt
         if self._integral_x > self.max_integral:
@@ -57,44 +85,33 @@ class ServoController:
             self._integral_y = self.max_integral
         elif self._integral_y < -self.max_integral:
             self._integral_y = -self.max_integral
-
         # A sensor state can be reused by more than one control iteration.
-        if dt > 0.0 and self._prev_error_x is not None and self._prev_error_y is not None:
-            error_vx = self.alpha*(error_x - self._prev_error_x) / dt + (1-self.alpha) * self._previous_error_vx
-            error_vy = self.alpha*(error_y - self._prev_error_y) / dt + (1-self.alpha) * self._previous_error_vy
+        if dt > 0.0 and self._previous_error_x is not None and self._previous_error_y is not None:
+            error_vx = self.alpha*(error_x - self._previous_error_x) / dt + (1-self.alpha) * self._previous_error_vx
+            error_vy = self.alpha*(error_y - self._previous_error_y) / dt + (1-self.alpha) * self._previous_error_vy
         else:
             error_vx = 0.0
             error_vy = 0.0
 
-        if dt > 0.0 or self._prev_error_x is None:
-            self._prev_error_x = error_x
-            self._prev_error_y = error_y
+        if dt > 0.0 or self._previous_error_x is None:
+            self._previous_error_x = error_x
+            self._previous_error_y = error_y
+            self._previous_error_vx = error_vx
+            self._previous_error_vy = error_vy
         # Convert the position and velocity error into the plate tilt.
         tilt_about_y_deg = (self.kp * error_x + self.ki * self._integral_x + self.kd * error_vx)
         tilt_about_x_deg = (self.kp * error_y + self.ki * self._integral_y + self.kd * error_vy)
 
-        if tilt_about_y_deg > self.max_tilt_deg:
-            tilt_about_y_deg = self.max_tilt_deg
-        elif tilt_about_y_deg < -self.max_tilt_deg:
-            tilt_about_y_deg = -self.max_tilt_deg
-        if tilt_about_x_deg > self.max_tilt_deg:
-            tilt_about_x_deg = self.max_tilt_deg
-        elif tilt_about_x_deg < -self.max_tilt_deg:
-            tilt_about_x_deg = -self.max_tilt_deg
-
-        servox_deg, servoy_deg = self.get_servo_angles(tilt_about_x_deg, tilt_about_y_deg)
-
-        return ControlCommand(system.timestamp, tilt_about_x_deg, tilt_about_y_deg, servox_deg, servoy_deg)
+        return self.command_for_tilt(tilt_about_x_deg, tilt_about_y_deg)
 
     def get_system_state(self,ball_state: BallState, table_state: PlateState, ref_state: ReferenceState)->SystemState:
-        timestamp = max(ball_state.timestamp,table_state.timestamp)
-        return SystemState(timestamp, ball_state,table_state,ref_state)
+        return SystemState(time.monotonic(), ball_state,table_state,ref_state)
 
+    @property
+    def max_tilt_cmds(self)->tuple[ControlCommand, ControlCommand]:
+        return (self.command_for_tilt(self.max_tilt_deg, 0.0),
+                self.command_for_tilt(0.0, self.max_tilt_deg))
 
-    def get_max_tilt_cmds(self)->tuple[str, str]:
-
-        max_servo_x, max_servo_y = self.get_servo_angles(self.max_tilt_deg, self.max_tilt_deg)
-        return (f"{max_servo_x},{self.servo_config.center_deg}", f"{max_servo_y},{self.servo_config.center_deg}")
-
-    def get_level_command(self):
-        pass
+    @property
+    def center_cmd(self):
+        return self.command_for_tilt(0.0, 0.0)

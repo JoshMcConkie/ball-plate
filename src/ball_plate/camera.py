@@ -1,7 +1,7 @@
 
 import subprocess
 from dataclasses import dataclass
-from time import time
+import time
 
 import cv2
 import numpy as np
@@ -35,7 +35,7 @@ class CoordinateMap:
         height_px = float((np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2.0)
 
         cx, cy = pts.mean(axis=0)   
-        return CoordinateMap(plate_config.width_m / width_px,
+        return cls(plate_config.width_m / width_px,
                              plate_config.height_m / height_px,
                              cx,
                              cy)
