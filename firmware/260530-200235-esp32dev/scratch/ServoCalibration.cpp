@@ -2,7 +2,7 @@
 #include <ESP32Servo.h>
 Servo s1, s2;
 
-const int P1 = 32, P2 = 33;
+const int PIN_A = 32, PIN_B = 33;
 int active = 1;                 // 1 or 2: which servo you're moving
 int stepUs = 200;                 // jog size (µs)
 int us1 = 1500, us2 = 1500;     // current commands
@@ -28,7 +28,7 @@ void printState() {
 
 void setup() {
   Serial.begin(115200);
-  s1.attach(P1); s2.attach(P2);
+  s1.attach(PIN_A); s2.attach(PIN_B);
   delay(300);
   writeCmds(); printState();
   Serial.println("Keys: '1'/'2' select servo | 'a' left, 'd' right | '[' smaller step, ']' bigger step | 'c' center | 'm' save MIN | 'M' save MAX");

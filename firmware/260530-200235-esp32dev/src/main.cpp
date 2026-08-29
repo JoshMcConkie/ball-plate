@@ -1,38 +1,61 @@
 #include "Arduino.h"
+#include <cmath>
 #include <Wire.h>
 #include <ESP32Servo.h>
 #include <SparkFunLSM6DSO.h>
-
-constexpr int SERVOX_PIN = 32;
-constexpr int SERVOY_PIN = 33;
+#include "generated_system_config.hpp"
 
 Servo servoX; // changes x acc of ball
 Servo servoY; // changes y acc of ball
 LSM6DSO myIMU;
 
-// servo constraints
-constexpr int SERVOX_US_MIN = 800, SERVOY_US_MIN = 800;
-constexpr int SERVOX_US_MAX = 2200, SERVOY_US_MAX = 2200;
+constexpr int SERVOX_PIN = system_config::servo_x::gpio_pin;
+constexpr int SERVOY_PIN = system_config::servo_y::gpio_pin;
 
-constexpr double SERVOX_DEG_MIN = 60.0, SERVOY_DEG_MIN = 60.0;
-constexpr double SERVOX_DEG_MAX = 120.0, SERVOY_DEG_MAX = 120.0;
+constexpr int SERVOX_US_MIN = system_config::servo_x::min_pulse_us;
+constexpr int SERVOX_US_MAX = system_config::servo_x::max_pulse_us;
+
+constexpr int SERVOY_US_MIN = system_config::servo_y::min_pulse_us;
+constexpr int SERVOY_US_MAX = system_config::servo_y::max_pulse_us;
+
+constexpr int SEND_RATE_HZ = system_config::imu_stream_rate_hz;
+constexpr int SEND_PERIOD_MS = 1000 / SEND_RATE_HZ;
+
+constexpr double SERVOX_DEG_MIN = system_config::servo_x::min_deg;
+constexpr double SERVOX_DEG_MAX = system_config::servo_x::max_deg;
+constexpr double SERVOY_DEG_MIN = system_config::servo_y::min_deg;
+constexpr double SERVOY_DEG_MAX = system_config::servo_y::max_deg;
 
 // Servo commands
-double servox_cmd = 90.0, servoy_cmd = 90.0;
-
-// IMU state
-double tilt_about_x = 0, tilt_about_y = 0;
+double servox_cmd = system_config::servo_center_deg;
+double servoy_cmd = system_config::servo_center_deg;
 
 // Serial read var
 String line;
 
 // timing
 unsigned long last_imu_ms = 0;
-constexpr int SEND_RATE_HZ = 200;
-constexpr int SEND_PERIOD_MS = 1000 / SEND_RATE_HZ;
+
+int servoXMicroseconds(double angle_deg) {
+    return constrain(
+        static_cast<int>(std::lround(
+            system_config::servo_x::deg_to_us_slope * angle_deg
+            + system_config::servo_x::deg_to_us_intercept)),
+        SERVOX_US_MIN,
+        SERVOX_US_MAX);
+}
+
+int servoYMicroseconds(double angle_deg) {
+    return constrain(
+        static_cast<int>(std::lround(
+            system_config::servo_y::deg_to_us_slope * angle_deg
+            + system_config::servo_y::deg_to_us_intercept)),
+        SERVOY_US_MIN,
+        SERVOY_US_MAX);
+}
 
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(system_config::serial_baud);
     delay(500);
     Serial.println("Booting...");
 
@@ -54,8 +77,8 @@ void setup() {
     servoX.attach(SERVOX_PIN, SERVOX_US_MIN, SERVOX_US_MAX);
     servoY.attach(SERVOY_PIN, SERVOY_US_MIN, SERVOY_US_MAX);
     
-    servoX.write(servox_cmd);
-    servoY.write(servoy_cmd);
+    servoX.writeMicroseconds(servoXMicroseconds(servox_cmd));
+    servoY.writeMicroseconds(servoYMicroseconds(servoy_cmd));
 
     delay(1000);
 }
@@ -73,10 +96,8 @@ void loop() {
             servox_cmd = constrain(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX);
             servoy_cmd = constrain(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX);
 
-            // Map on the full 0-180 deg scale so a degree command maps to its
-            // true position (90 deg -> center). The constrain above limits travel.
-            int us_x = map(servox_cmd, 0.0, 180.0, SERVOX_US_MIN, SERVOX_US_MAX);
-            int us_y = map(servoy_cmd, 0.0, 180.0, SERVOY_US_MIN, SERVOY_US_MAX);
+            int us_x = servoXMicroseconds(servox_cmd);
+            int us_y = servoYMicroseconds(servoy_cmd);
             
             servoX.writeMicroseconds(us_x);
             servoY.writeMicroseconds(us_y);
