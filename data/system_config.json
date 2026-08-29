@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime": {
     "rates_hz": {
       "camera_capture": 60,
@@ -29,7 +29,74 @@
   },
   "plate": {
     "width_m": 0.22,
-    "height_m": 0.22
+    "height_m": 0.22,
+    "thickness_m": 0.01,
+    "mass_kg": 0.2,
+    "max_tilt_deg": 10.0
+  },
+  "linkage": {
+    "attachment_offset_x_m": 0.11,
+    "attachment_offset_y_m": 0.11,
+    "attachment_z_from_plate_pivot_m": -0.005,
+    "horn_radius_m": 0.023,
+    "horn_geom_radius_m": 0.002,
+    "pushrod_length_m": 0.04,
+    "pushrod_radius_m": 0.002
+  },
+  "servo": {
+    "axis_height_m": 0.0,
+    "max_angle_deg": 30.0,
+    "position_kp": 1.0,
+    "damping_ratio": 1.0
+  },
+  "ball": {
+    "radius_m": 0.02,
+    "mass_kg": 0.05,
+    "rgba": [
+      0.0,
+      0.5,
+      0.1,
+      1.0
+    ]
+  },
+  "simulation": {
+    "timestep_s": 0.002,
+    "light_pos_m": [
+      0.0,
+      0.0,
+      0.5
+    ],
+    "ball_initial_pos_m": [
+      0.0,
+      0.0,
+      0.15
+    ],
+    "imu_site_pos_from_plate_pivot_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "imu_site_quat_wxyz": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "camera": {
+      "pos_m": [
+        -0.1,
+        -0.6,
+        0.3
+      ],
+      "xyaxes": [
+        1.0,
+        0.0,
+        0.0,
+        -1.0,
+        -1.0,
+        0.0
+      ]
+    }
   },
   "controller": {
     "kp": 100.0,
@@ -40,19 +107,27 @@
   },
   "servos": {
     "arm_length_m": 0.023,
-    "center_deg": 90.0,
-    "min_deg": 30.0,
-    "max_deg": 150.0,
+    "center_deg": 90,
     "axes": {
       "x": {
         "gpio_pin": 32,
-        "min_pulse_us": 800,
-        "max_pulse_us": 2200
+        "calibration_search_min_pulse_us": 800,
+        "calibration_search_max_pulse_us": 2200,
+        "min_pulse_us": null,
+        "max_pulse_us": null,
+        "min_deg": null,
+        "max_deg": null,
+        "deg_to_us": null
       },
       "y": {
         "gpio_pin": 33,
-        "min_pulse_us": 800,
-        "max_pulse_us": 2200
+        "calibration_search_min_pulse_us": 800,
+        "calibration_search_max_pulse_us": 2200,
+        "min_pulse_us": null,
+        "max_pulse_us": null,
+        "min_deg": null,
+        "max_deg": null,
+        "deg_to_us": null
       }
     }
   },

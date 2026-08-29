@@ -1,4 +1,5 @@
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,11 +26,34 @@ class SerialConfig:
     timeout_s: float
 
 @dataclass(frozen=True, slots=True)
+class DegreeToMicrosecondsConfig:
+    slope_us_per_deg: float
+    intercept_us: float
+
+
+@dataclass(frozen=True, slots=True)
+class ServoAxisConfig:
+    gpio_pin: int
+    calibration_search_min_pulse_us: int
+    calibration_search_max_pulse_us: int
+    min_pulse_us: int
+    max_pulse_us: int
+    min_deg: float
+    max_deg: float
+    deg_to_us: DegreeToMicrosecondsConfig
+
+
+@dataclass(frozen=True, slots=True)
+class ServoAxesConfig:
+    x: ServoAxisConfig
+    y: ServoAxisConfig
+
+
+@dataclass(frozen=True, slots=True)
 class ServoConfig:
     arm_length_m: float
     center_deg: float
-    min_deg: float
-    max_deg: float
+    axes: ServoAxesConfig
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
@@ -91,6 +115,99 @@ DEFAULT_CONFIG_PATH = (
 )
 
 
+class ServoCalibrationRequiredError(RuntimeError):
+    """Raised when production code is loaded before servo calibration."""
+
+
+def _load_servo_axis(
+    axis_name: str,
+    data: dict,
+    *,
+    center_deg: float,
+) -> ServoAxisConfig:
+    required_calibration_fields = (
+        "min_pulse_us",
+        "max_pulse_us",
+        "min_deg",
+        "max_deg",
+        "deg_to_us",
+    )
+    missing = [
+        field
+        for field in required_calibration_fields
+        if data.get(field) is None
+    ]
+    if missing:
+        raise ServoCalibrationRequiredError(
+            f"Servo calibration required for axis {axis_name!r}: "
+            f"missing {', '.join(missing)}"
+        )
+
+    map_data = data["deg_to_us"]
+    search_min_us = data["calibration_search_min_pulse_us"]
+    search_max_us = data["calibration_search_max_pulse_us"]
+    min_us = data["min_pulse_us"]
+    max_us = data["max_pulse_us"]
+    min_deg = float(data["min_deg"])
+    max_deg = float(data["max_deg"])
+    slope = float(map_data["slope_us_per_deg"])
+    intercept = float(map_data["intercept_us"])
+
+    if not all(
+        type(value) is int
+        for value in (search_min_us, search_max_us, min_us, max_us)
+    ):
+        raise RuntimeError(
+            f"Servo pulse bounds for axis {axis_name!r} must be integers"
+        )
+    if not search_min_us <= min_us < max_us <= search_max_us:
+        raise RuntimeError(
+            f"Servo calibration for axis {axis_name!r} is outside its "
+            "configured search envelope"
+        )
+    if not (
+        math.isfinite(min_deg)
+        and math.isfinite(max_deg)
+        and 0.0 <= min_deg < max_deg <= 180.0
+    ):
+        raise RuntimeError(
+            f"Servo degree bounds for axis {axis_name!r} are invalid"
+        )
+    if not min_deg <= center_deg <= max_deg:
+        raise RuntimeError(
+            f"Servo center is outside the calibrated axis {axis_name!r} range"
+        )
+    if not math.isfinite(slope) or slope == 0.0 or not math.isfinite(intercept):
+        raise RuntimeError(
+            f"Servo degree map for axis {axis_name!r} is invalid"
+        )
+    mapped_bounds = sorted(
+        (slope * min_deg + intercept, slope * max_deg + intercept)
+    )
+    if not (
+        math.isclose(mapped_bounds[0], min_us, abs_tol=0.5)
+        and math.isclose(mapped_bounds[1], max_us, abs_tol=0.5)
+    ):
+        raise RuntimeError(
+            f"Servo degree map for axis {axis_name!r} does not reconstruct "
+            "its pulse bounds"
+        )
+
+    return ServoAxisConfig(
+        gpio_pin=data["gpio_pin"],
+        calibration_search_min_pulse_us=search_min_us,
+        calibration_search_max_pulse_us=search_max_us,
+        min_pulse_us=min_us,
+        max_pulse_us=max_us,
+        min_deg=min_deg,
+        max_deg=max_deg,
+        deg_to_us=DegreeToMicrosecondsConfig(
+            slope_us_per_deg=slope,
+            intercept_us=intercept,
+        ),
+    )
+
+
 def load_system_config(
     path: str | Path = DEFAULT_CONFIG_PATH,) -> SystemConfig:
     path = Path(path)
@@ -108,7 +225,7 @@ def load_system_config(
             f"column {exc.colno}: {exc.msg}"
         ) from exc
 
-    if data.get("schema_version") != 1:
+    if data.get("schema_version") != 2:
         raise RuntimeError(
             f"Unsupported configuration schema version: "
             f"{data.get('schema_version')!r}"
@@ -118,22 +235,27 @@ def load_system_config(
         servo_data = data["servos"]
         calibration_data = data["calibration"]
 
-        ServoConfig(
-            arm_length_m=servo_data["arm_length_m"],
-            center_deg=servo_data["center_deg"],
-            min_deg=servo_data["min_deg"],
-            max_deg=servo_data["max_deg"],
+        center_deg = float(servo_data["center_deg"])
+        servo_axes = ServoAxesConfig(
+            x=_load_servo_axis(
+                "x", servo_data["axes"]["x"], center_deg=center_deg
+            ),
+            y=_load_servo_axis(
+                "y", servo_data["axes"]["y"], center_deg=center_deg
+            ),
         )
         return SystemConfig(
             controller=ControllerConfig(**data["controller"]),
-            plate=PlateConfig(**data["plate"]),
+            plate=PlateConfig(
+                width_m=data["plate"]["width_m"],
+                height_m=data["plate"]["height_m"],
+            ),
             serial=SerialConfig(**data["serial"]),
             camera=CameraConfig(**data["camera"]),
             servos=ServoConfig(
                 arm_length_m=data["servos"]["arm_length_m"],
-                center_deg=data["servos"]["center_deg"],
-                min_deg=data["servos"]["min_deg"],
-                max_deg=data["servos"]["max_deg"],
+                center_deg=center_deg,
+                axes=servo_axes,
             ),
             reference=ReferenceConfig(**data["reference"]),
             imu=IMUConfig(**data["imu"]),
@@ -147,7 +269,7 @@ def load_system_config(
                 rates_hz=RuntimeRatesConfig(**data["runtime"]["rates_hz"])
             )
         )
-    except (KeyError, TypeError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         raise RuntimeError(
             f"Invalid system configuration in {path}: {exc}"
         ) from exc

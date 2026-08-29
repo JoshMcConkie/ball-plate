@@ -53,11 +53,11 @@ class ServoController:
             tilt_about_y_deg)
 
         servox_deg = max(
-            self.servo_config.min_deg,
-            min(self.servo_config.max_deg, servox_deg))
+            self.servo_config.axes.x.min_deg,
+            min(self.servo_config.axes.x.max_deg, servox_deg))
         servoy_deg = max(
-            self.servo_config.min_deg,
-            min(self.servo_config.max_deg, servoy_deg))
+            self.servo_config.axes.y.min_deg,
+            min(self.servo_config.axes.y.max_deg, servoy_deg))
 
         return ControlCommand(
             time.monotonic(),
