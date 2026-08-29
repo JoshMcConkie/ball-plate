@@ -1,0 +1,217 @@
+{% set plate = config.plate %}
+{% set linkage = config.linkage %}
+{% set servo = config.servo %}
+{% set ball = config.ball %}
+{% set sim = config.simulation %}
+
+{# Derived geometry: ensures the neutral linkage endpoints coincide. #}
+{% set plate_half_x = plate.width_m / 2 %}
+{% set plate_half_y = plate.height_m / 2 %}
+{% set plate_half_z = plate.thickness_m / 2 %}
+{% set plate_pivot_z =
+    servo.axis_height_m
+    + linkage.pushrod_length_m
+    - linkage.attachment_z_from_plate_pivot_m
+%}
+
+<mujoco model="ball_plate">
+
+    <compiler angle="degree"/>
+
+    <option
+        timestep="{{ sim.timestep_s }}"
+        integrator="implicitfast"/>
+
+    <default>
+        <default class="servo">
+            <position
+                kp="{{ servo.position_kp }}"
+                dampratio="{{ servo.damping_ratio }}"
+                inheritrange="1"/>
+        </default>
+    </default>
+
+    <worldbody>
+
+        <light pos="{{ sim.light_pos_m | join(' ') }}"/>
+
+        <body name="build">
+
+            <body name="plate" pos="0 0 {{ plate_pivot_z }}">
+
+                <joint
+                    name="plate_x"
+                    type="hinge"
+                    axis="1 0 0"
+                    limited="true"
+                    range="{{ -plate.max_tilt_deg }} {{ plate.max_tilt_deg }}"/>
+
+                <joint
+                    name="plate_y"
+                    type="hinge"
+                    axis="0 1 0"
+                    limited="true"
+                    range="{{ -plate.max_tilt_deg }} {{ plate.max_tilt_deg }}"/>
+
+                <geom
+                    type="box"
+                    size="{{ plate_half_x }} {{ plate_half_y }} {{ plate_half_z }}"
+                    mass="{{ plate.mass_kg }}"/>
+
+                <site
+                    name="IMU"
+                    pos="{{ sim.imu_site_pos_from_plate_pivot_m | join(' ') }}"
+                    quat="{{ sim.imu_site_quat_wxyz | join(' ') }}"/>
+
+                <site
+                    name="plate_x_attach"
+                    pos="0 {{ linkage.attachment_offset_y_m }}
+                         {{ linkage.attachment_z_from_plate_pivot_m }}"/>
+
+                <site
+                    name="plate_y_attach"
+                    pos="{{ linkage.attachment_offset_x_m }} 0
+                         {{ linkage.attachment_z_from_plate_pivot_m }}"/>
+
+            </body>
+        </body>
+
+        <body
+            name="servo_x_horn"
+            pos="{{ linkage.horn_radius_m }}
+                 {{ linkage.attachment_offset_y_m }}
+                 {{ servo.axis_height_m }}">
+
+            <joint
+                name="servo_x_joint"
+                type="hinge"
+                axis="0 1 0"
+                limited="true"
+                range="{{ -servo.max_angle_deg }} {{ servo.max_angle_deg }}"/>
+
+            <geom
+                type="capsule"
+                fromto="0 0 0 {{ -linkage.horn_radius_m }} 0 0"
+                size="{{ linkage.horn_geom_radius_m }}"
+                contype="2"
+                conaffinity="0"/>
+
+            <body
+                name="link_x"
+                pos="{{ -linkage.horn_radius_m }} 0 0">
+
+                <joint type="ball"/>
+
+                <geom
+                    type="capsule"
+                    fromto="0 0 0 0 0 {{ linkage.pushrod_length_m }}"
+                    size="{{ linkage.pushrod_radius_m }}"
+                    contype="2"
+                    conaffinity="0"/>
+
+                <site
+                    name="link_x_tip"
+                    pos="0 0 {{ linkage.pushrod_length_m }}"/>
+
+            </body>
+        </body>
+
+        <body
+            name="servo_y_horn"
+            pos="{{ linkage.attachment_offset_x_m }}
+                 {{ linkage.horn_radius_m }}
+                 {{ servo.axis_height_m }}">
+
+            <joint
+                name="servo_y_joint"
+                type="hinge"
+                axis="1 0 0"
+                limited="true"
+                range="{{ -servo.max_angle_deg }} {{ servo.max_angle_deg }}"/>
+
+            <geom
+                type="capsule"
+                fromto="0 0 0 0 {{ -linkage.horn_radius_m }} 0"
+                size="{{ linkage.horn_geom_radius_m }}"
+                contype="2"
+                conaffinity="0"/>
+
+            <body
+                name="link_y"
+                pos="0 {{ -linkage.horn_radius_m }} 0">
+
+                <joint type="ball"/>
+
+                <geom
+                    type="capsule"
+                    fromto="0 0 0 0 0 {{ linkage.pushrod_length_m }}"
+                    size="{{ linkage.pushrod_radius_m }}"
+                    contype="2"
+                    conaffinity="0"/>
+
+                <site
+                    name="link_y_tip"
+                    pos="0 0 {{ linkage.pushrod_length_m }}"/>
+
+            </body>
+        </body>
+
+        <body name="ball" pos="{{ sim.ball_initial_pos_m | join(' ') }}">
+
+            <freejoint/>
+
+            <geom
+                name="ball"
+                type="sphere"
+                size="{{ ball.radius_m }}"
+                mass="{{ ball.mass_kg }}"
+                rgba="{{ ball.rgba | join(' ') }}"/>
+
+        </body>
+
+        <camera
+            name="y"
+            pos="{{ sim.camera.pos_m | join(' ') }}"
+            xyaxes="{{ sim.camera.xyaxes | join(' ') }}"/>
+
+    </worldbody>
+
+    <equality>
+
+        <connect
+            site1="link_x_tip"
+            site2="plate_x_attach"/>
+
+        <connect
+            site1="link_y_tip"
+            site2="plate_y_attach"/>
+
+    </equality>
+
+    <sensor>
+
+        <accelerometer
+            name="accelerometer"
+            site="IMU"/>
+
+        <gyro
+            name="gyro"
+            site="IMU"/>
+
+    </sensor>
+
+    <actuator>
+
+        <position
+            name="servo_x"
+            class="servo"
+            joint="servo_x_joint"/>
+
+        <position
+            name="servo_y"
+            class="servo"
+            joint="servo_y_joint"/>
+
+    </actuator>
+
+</mujoco>

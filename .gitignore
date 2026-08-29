@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache
 data/**/*.csv
 data/**/calibration.json
+MUJOCO_LOG.TXT
