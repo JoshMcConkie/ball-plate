@@ -5,30 +5,30 @@
 #include <SparkFunLSM6DSO.h>
 #include "generated_system_config.hpp"
 
-Servo servoX; // changes x acc of ball
-Servo servoY; // changes y acc of ball
+Servo servoA; // existing mapping: affects x acceleration of ball
+Servo servoB; // existing mapping: affects y acceleration of ball
 LSM6DSO myIMU;
 
-constexpr int SERVOX_PIN = system_config::servo_x::gpio_pin;
-constexpr int SERVOY_PIN = system_config::servo_y::gpio_pin;
+constexpr int SERVOA_PIN = system_config::servo_a::gpio_pin;
+constexpr int SERVOB_PIN = system_config::servo_b::gpio_pin;
 
-constexpr int SERVOX_US_MIN = system_config::servo_x::min_pulse_us;
-constexpr int SERVOX_US_MAX = system_config::servo_x::max_pulse_us;
+constexpr int SERVOA_US_MIN = system_config::servo_a::min_pulse_us;
+constexpr int SERVOA_US_MAX = system_config::servo_a::max_pulse_us;
 
-constexpr int SERVOY_US_MIN = system_config::servo_y::min_pulse_us;
-constexpr int SERVOY_US_MAX = system_config::servo_y::max_pulse_us;
+constexpr int SERVOB_US_MIN = system_config::servo_b::min_pulse_us;
+constexpr int SERVOB_US_MAX = system_config::servo_b::max_pulse_us;
 
 constexpr int SEND_RATE_HZ = system_config::imu_stream_rate_hz;
 constexpr int SEND_PERIOD_MS = 1000 / SEND_RATE_HZ;
 
-constexpr double SERVOX_DEG_MIN = system_config::servo_x::min_deg;
-constexpr double SERVOX_DEG_MAX = system_config::servo_x::max_deg;
-constexpr double SERVOY_DEG_MIN = system_config::servo_y::min_deg;
-constexpr double SERVOY_DEG_MAX = system_config::servo_y::max_deg;
+constexpr double SERVOA_DEG_MIN = system_config::servo_a::min_deg;
+constexpr double SERVOA_DEG_MAX = system_config::servo_a::max_deg;
+constexpr double SERVOB_DEG_MIN = system_config::servo_b::min_deg;
+constexpr double SERVOB_DEG_MAX = system_config::servo_b::max_deg;
 
 // Servo commands
-double servox_cmd = system_config::servo_center_deg;
-double servoy_cmd = system_config::servo_center_deg;
+double servo_a_cmd = system_config::servo_center_deg;
+double servo_b_cmd = system_config::servo_center_deg;
 
 // Serial read var
 String line;
@@ -36,22 +36,22 @@ String line;
 // timing
 unsigned long last_imu_ms = 0;
 
-int servoXMicroseconds(double angle_deg) {
+int servoAMicroseconds(double angle_deg) {
     return constrain(
         static_cast<int>(std::lround(
-            system_config::servo_x::deg_to_us_slope * angle_deg
-            + system_config::servo_x::deg_to_us_intercept)),
-        SERVOX_US_MIN,
-        SERVOX_US_MAX);
+            system_config::servo_a::deg_to_us_slope * angle_deg
+            + system_config::servo_a::deg_to_us_intercept)),
+        SERVOA_US_MIN,
+        SERVOA_US_MAX);
 }
 
-int servoYMicroseconds(double angle_deg) {
+int servoBMicroseconds(double angle_deg) {
     return constrain(
         static_cast<int>(std::lround(
-            system_config::servo_y::deg_to_us_slope * angle_deg
-            + system_config::servo_y::deg_to_us_intercept)),
-        SERVOY_US_MIN,
-        SERVOY_US_MAX);
+            system_config::servo_b::deg_to_us_slope * angle_deg
+            + system_config::servo_b::deg_to_us_intercept)),
+        SERVOB_US_MIN,
+        SERVOB_US_MAX);
 }
 
 void setup() {
@@ -74,11 +74,11 @@ void setup() {
         Serial.println("Loaded Settings.");
 
     // Servo init
-    servoX.attach(SERVOX_PIN, SERVOX_US_MIN, SERVOX_US_MAX);
-    servoY.attach(SERVOY_PIN, SERVOY_US_MIN, SERVOY_US_MAX);
+    servoA.attach(SERVOA_PIN, SERVOA_US_MIN, SERVOA_US_MAX);
+    servoB.attach(SERVOB_PIN, SERVOB_US_MIN, SERVOB_US_MAX);
     
-    servoX.writeMicroseconds(servoXMicroseconds(servox_cmd));
-    servoY.writeMicroseconds(servoYMicroseconds(servoy_cmd));
+    servoA.writeMicroseconds(servoAMicroseconds(servo_a_cmd));
+    servoB.writeMicroseconds(servoBMicroseconds(servo_b_cmd));
 
     delay(1000);
 }
@@ -88,19 +88,19 @@ void loop() {
         line = Serial.readStringUntil('\n');  // read one packet (line)
         line.trim();
 
-        if (sscanf(line.c_str(), "%lf,%lf", &servox_cmd, &servoy_cmd) == 2) {
+        if (sscanf(line.c_str(), "%lf,%lf", &servo_a_cmd, &servo_b_cmd) == 2) {
             // Serial.print("OK,");
-            // Serial.print(servox_cmd); Serial.print(',');
-            // Serial.println(servoy_cmd);
+            // Serial.print(servo_a_cmd); Serial.print(',');
+            // Serial.println(servo_b_cmd);
 
-            servox_cmd = constrain(servox_cmd,SERVOX_DEG_MIN,SERVOX_DEG_MAX);
-            servoy_cmd = constrain(servoy_cmd,SERVOY_DEG_MIN,SERVOY_DEG_MAX);
+            servo_a_cmd = constrain(servo_a_cmd,SERVOA_DEG_MIN,SERVOA_DEG_MAX);
+            servo_b_cmd = constrain(servo_b_cmd,SERVOB_DEG_MIN,SERVOB_DEG_MAX);
 
-            int us_x = servoXMicroseconds(servox_cmd);
-            int us_y = servoYMicroseconds(servoy_cmd);
+            int us_a = servoAMicroseconds(servo_a_cmd);
+            int us_b = servoBMicroseconds(servo_b_cmd);
             
-            servoX.writeMicroseconds(us_x);
-            servoY.writeMicroseconds(us_y);
+            servoA.writeMicroseconds(us_a);
+            servoB.writeMicroseconds(us_b);
 
             
             

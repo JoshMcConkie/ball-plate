@@ -32,7 +32,7 @@ class DegreeToMicrosecondsConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class ServoAxisConfig:
+class PhysicalServoConfig:
     gpio_pin: int
     calibration_search_min_pulse_us: int
     calibration_search_max_pulse_us: int
@@ -44,16 +44,11 @@ class ServoAxisConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class ServoAxesConfig:
-    x: ServoAxisConfig
-    y: ServoAxisConfig
-
-
-@dataclass(frozen=True, slots=True)
 class ServoConfig:
     arm_length_m: float
     center_deg: float
-    axes: ServoAxesConfig
+    a: PhysicalServoConfig
+    b: PhysicalServoConfig
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
@@ -119,12 +114,12 @@ class ServoCalibrationRequiredError(RuntimeError):
     """Raised when production code is loaded before servo calibration."""
 
 
-def _load_servo_axis(
-    axis_name: str,
+def _load_physical_servo(
+    servo_name: str,
     data: dict,
     *,
     center_deg: float,
-) -> ServoAxisConfig:
+) -> PhysicalServoConfig:
     required_calibration_fields = (
         "min_pulse_us",
         "max_pulse_us",
@@ -139,7 +134,7 @@ def _load_servo_axis(
     ]
     if missing:
         raise ServoCalibrationRequiredError(
-            f"Servo calibration required for axis {axis_name!r}: "
+            f"Servo calibration required for servo {servo_name!r}: "
             f"missing {', '.join(missing)}"
         )
 
@@ -158,11 +153,11 @@ def _load_servo_axis(
         for value in (search_min_us, search_max_us, min_us, max_us)
     ):
         raise RuntimeError(
-            f"Servo pulse bounds for axis {axis_name!r} must be integers"
+            f"Pulse bounds for servo {servo_name!r} must be integers"
         )
     if not search_min_us <= min_us < max_us <= search_max_us:
         raise RuntimeError(
-            f"Servo calibration for axis {axis_name!r} is outside its "
+            f"Calibration for servo {servo_name!r} is outside its "
             "configured search envelope"
         )
     if not (
@@ -171,15 +166,15 @@ def _load_servo_axis(
         and 0.0 <= min_deg < max_deg <= 180.0
     ):
         raise RuntimeError(
-            f"Servo degree bounds for axis {axis_name!r} are invalid"
+            f"Degree bounds for servo {servo_name!r} are invalid"
         )
     if not min_deg <= center_deg <= max_deg:
         raise RuntimeError(
-            f"Servo center is outside the calibrated axis {axis_name!r} range"
+            f"Servo center is outside servo {servo_name!r}'s calibrated range"
         )
     if not math.isfinite(slope) or slope == 0.0 or not math.isfinite(intercept):
         raise RuntimeError(
-            f"Servo degree map for axis {axis_name!r} is invalid"
+            f"Degree map for servo {servo_name!r} is invalid"
         )
     mapped_bounds = sorted(
         (slope * min_deg + intercept, slope * max_deg + intercept)
@@ -189,11 +184,11 @@ def _load_servo_axis(
         and math.isclose(mapped_bounds[1], max_us, abs_tol=0.5)
     ):
         raise RuntimeError(
-            f"Servo degree map for axis {axis_name!r} does not reconstruct "
+            f"Degree map for servo {servo_name!r} does not reconstruct "
             "its pulse bounds"
         )
 
-    return ServoAxisConfig(
+    return PhysicalServoConfig(
         gpio_pin=data["gpio_pin"],
         calibration_search_min_pulse_us=search_min_us,
         calibration_search_max_pulse_us=search_max_us,
@@ -225,7 +220,7 @@ def load_system_config(
             f"column {exc.colno}: {exc.msg}"
         ) from exc
 
-    if data.get("schema_version") != 2:
+    if data.get("schema_version") != 3:
         raise RuntimeError(
             f"Unsupported configuration schema version: "
             f"{data.get('schema_version')!r}"
@@ -236,13 +231,11 @@ def load_system_config(
         calibration_data = data["calibration"]
 
         center_deg = float(servo_data["center_deg"])
-        servo_axes = ServoAxesConfig(
-            x=_load_servo_axis(
-                "x", servo_data["axes"]["x"], center_deg=center_deg
-            ),
-            y=_load_servo_axis(
-                "y", servo_data["axes"]["y"], center_deg=center_deg
-            ),
+        servo_a = _load_physical_servo(
+            "a", servo_data["a"], center_deg=center_deg
+        )
+        servo_b = _load_physical_servo(
+            "b", servo_data["b"], center_deg=center_deg
         )
         return SystemConfig(
             controller=ControllerConfig(**data["controller"]),
@@ -255,7 +248,8 @@ def load_system_config(
             servos=ServoConfig(
                 arm_length_m=data["servos"]["arm_length_m"],
                 center_deg=center_deg,
-                axes=servo_axes,
+                a=servo_a,
+                b=servo_b,
             ),
             reference=ReferenceConfig(**data["reference"]),
             imu=IMUConfig(**data["imu"]),

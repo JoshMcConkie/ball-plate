@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "runtime": {
     "rates_hz": {
       "camera_capture": 60,
@@ -108,27 +108,25 @@
   "servos": {
     "arm_length_m": 0.023,
     "center_deg": 90,
-    "axes": {
-      "x": {
-        "gpio_pin": 32,
-        "calibration_search_min_pulse_us": 800,
-        "calibration_search_max_pulse_us": 2200,
-        "min_pulse_us": null,
-        "max_pulse_us": null,
-        "min_deg": null,
-        "max_deg": null,
-        "deg_to_us": null
-      },
-      "y": {
-        "gpio_pin": 33,
-        "calibration_search_min_pulse_us": 800,
-        "calibration_search_max_pulse_us": 2200,
-        "min_pulse_us": null,
-        "max_pulse_us": null,
-        "min_deg": null,
-        "max_deg": null,
-        "deg_to_us": null
-      }
+    "a": {
+      "gpio_pin": 32,
+      "calibration_search_min_pulse_us": 800,
+      "calibration_search_max_pulse_us": 2200,
+      "min_pulse_us": null,
+      "max_pulse_us": null,
+      "min_deg": null,
+      "max_deg": null,
+      "deg_to_us": null
+    },
+    "b": {
+      "gpio_pin": 33,
+      "calibration_search_min_pulse_us": 800,
+      "calibration_search_max_pulse_us": 2200,
+      "min_pulse_us": null,
+      "max_pulse_us": null,
+      "min_deg": null,
+      "max_deg": null,
+      "deg_to_us": null
     }
   },
   "imu": {

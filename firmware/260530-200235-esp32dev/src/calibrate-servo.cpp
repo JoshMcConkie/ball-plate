@@ -5,15 +5,15 @@
 
 namespace {
 
-Servo servo_x;
-Servo servo_y;
+Servo servo_a;
+Servo servo_b;
 
 enum class Stage {
   DISARMED,
-  X_LOW,
-  X_HIGH,
-  Y_LOW,
-  Y_HIGH,
+  A_LOW,
+  A_HIGH,
+  B_LOW,
+  B_HIGH,
   COMPLETE,
 };
 
@@ -25,29 +25,29 @@ struct EndpointPair {
 };
 
 Stage stage = Stage::DISARMED;
-EndpointPair x_points;
-EndpointPair y_points;
-int x_us = 0;
-int y_us = 0;
+EndpointPair a_points;
+EndpointPair b_points;
+int a_us = 0;
+int b_us = 0;
 String input_line;
 
-constexpr int x_midpoint_us() {
-  return (system_config::servo_x::calibration_search_min_pulse_us
-          + system_config::servo_x::calibration_search_max_pulse_us) / 2;
+constexpr int a_midpoint_us() {
+  return (system_config::servo_a::calibration_search_min_pulse_us
+          + system_config::servo_a::calibration_search_max_pulse_us) / 2;
 }
 
-constexpr int y_midpoint_us() {
-  return (system_config::servo_y::calibration_search_min_pulse_us
-          + system_config::servo_y::calibration_search_max_pulse_us) / 2;
+constexpr int b_midpoint_us() {
+  return (system_config::servo_b::calibration_search_min_pulse_us
+          + system_config::servo_b::calibration_search_max_pulse_us) / 2;
 }
 
 const char *stage_name() {
   switch (stage) {
     case Stage::DISARMED: return "DISARMED";
-    case Stage::X_LOW: return "X_LOW";
-    case Stage::X_HIGH: return "X_HIGH";
-    case Stage::Y_LOW: return "Y_LOW";
-    case Stage::Y_HIGH: return "Y_HIGH";
+    case Stage::A_LOW: return "A_LOW";
+    case Stage::A_HIGH: return "A_HIGH";
+    case Stage::B_LOW: return "B_LOW";
+    case Stage::B_HIGH: return "B_HIGH";
     case Stage::COMPLETE: return "COMPLETE";
   }
   return "UNKNOWN";
@@ -57,34 +57,34 @@ bool is_armed() {
   return stage != Stage::DISARMED;
 }
 
-char active_axis() {
-  return stage == Stage::X_LOW || stage == Stage::X_HIGH ? 'x' : 'y';
+char active_servo() {
+  return stage == Stage::A_LOW || stage == Stage::A_HIGH ? 'a' : 'b';
 }
 
 int active_min_us() {
-  return active_axis() == 'x'
-      ? system_config::servo_x::calibration_search_min_pulse_us
-      : system_config::servo_y::calibration_search_min_pulse_us;
+  return active_servo() == 'a'
+      ? system_config::servo_a::calibration_search_min_pulse_us
+      : system_config::servo_b::calibration_search_min_pulse_us;
 }
 
 int active_max_us() {
-  return active_axis() == 'x'
-      ? system_config::servo_x::calibration_search_max_pulse_us
-      : system_config::servo_y::calibration_search_max_pulse_us;
+  return active_servo() == 'a'
+      ? system_config::servo_a::calibration_search_max_pulse_us
+      : system_config::servo_b::calibration_search_max_pulse_us;
 }
 
 int &active_pulse_us() {
-  return active_axis() == 'x' ? x_us : y_us;
+  return active_servo() == 'a' ? a_us : b_us;
 }
 
 void write_positions() {
-  servo_x.writeMicroseconds(x_us);
-  servo_y.writeMicroseconds(y_us);
+  servo_a.writeMicroseconds(a_us);
+  servo_b.writeMicroseconds(b_us);
 }
 
 void center_servos() {
-  x_us = x_midpoint_us();
-  y_us = y_midpoint_us();
+  a_us = a_midpoint_us();
+  b_us = b_midpoint_us();
   if (is_armed()) {
     write_positions();
   }
@@ -100,19 +100,19 @@ void print_error(const char *code, const char *message) {
 void print_state() {
   Serial.print("STATE ");
   Serial.print(stage_name());
-  Serial.print(" x ");
-  Serial.print(x_us);
-  Serial.print(" y ");
-  Serial.println(y_us);
+  Serial.print(" a ");
+  Serial.print(a_us);
+  Serial.print(" b ");
+  Serial.println(b_us);
 }
 
 void print_prompt() {
-  if (stage == Stage::X_LOW || stage == Stage::X_HIGH
-      || stage == Stage::Y_LOW || stage == Stage::Y_HIGH) {
+  if (stage == Stage::A_LOW || stage == Stage::A_HIGH
+      || stage == Stage::B_LOW || stage == Stage::B_HIGH) {
     Serial.print("PROMPT ");
-    Serial.print(active_axis());
+    Serial.print(active_servo());
     Serial.print(" ");
-    Serial.println(stage == Stage::X_LOW || stage == Stage::Y_LOW
+    Serial.println(stage == Stage::A_LOW || stage == Stage::B_LOW
                        ? "min_pulse"
                        : "max_pulse");
   }
@@ -129,7 +129,7 @@ bool parse_double_strict(const String &text, double &value) {
       && std::isfinite(value);
 }
 
-bool validate_pair(const EndpointPair &points, char axis) {
+bool validate_pair(const EndpointPair &points, char servo_id) {
   if (points.low_us >= points.high_us) {
     print_error("PULSE_ORDER", "max-pulse endpoint must exceed min-pulse endpoint");
     return false;
@@ -142,15 +142,15 @@ bool validate_pair(const EndpointPair &points, char axis) {
   const double max_deg = max(points.angle_at_low_us, points.angle_at_high_us);
   if (system_config::servo_center_deg < min_deg
       || system_config::servo_center_deg > max_deg) {
-    Serial.print("ERROR CENTER_RANGE configured center is outside axis ");
-    Serial.print(axis);
+    Serial.print("ERROR CENTER_RANGE configured center is outside servo ");
+    Serial.print(servo_id);
     Serial.println(" measurements");
     return false;
   }
   return true;
 }
 
-void print_result(char axis, const EndpointPair &points) {
+void print_result(char servo_id, const EndpointPair &points) {
   const double slope = static_cast<double>(points.high_us - points.low_us)
       / (points.angle_at_high_us - points.angle_at_low_us);
   const double intercept = points.low_us - slope * points.angle_at_low_us;
@@ -158,7 +158,7 @@ void print_result(char axis, const EndpointPair &points) {
   const double max_deg = max(points.angle_at_low_us, points.angle_at_high_us);
 
   Serial.print("RESULT ");
-  Serial.print(axis);
+  Serial.print(servo_id);
   Serial.print(" "); Serial.print(points.low_us);
   Serial.print(" "); Serial.print(points.angle_at_low_us, 9);
   Serial.print(" "); Serial.print(points.high_us);
@@ -170,16 +170,16 @@ void print_result(char axis, const EndpointPair &points) {
 }
 
 void reset_measurements() {
-  x_points = EndpointPair{};
-  y_points = EndpointPair{};
+  a_points = EndpointPair{};
+  b_points = EndpointPair{};
 }
 
 void disarm() {
   if (is_armed()) {
     center_servos();
     delay(250);
-    servo_x.detach();
-    servo_y.detach();
+    servo_a.detach();
+    servo_b.detach();
   }
   stage = Stage::DISARMED;
   Serial.println("ACK DISARM");
@@ -192,25 +192,25 @@ void capture_angle(double angle_deg) {
     return;
   }
 
-  EndpointPair &points = active_axis() == 'x' ? x_points : y_points;
-  if (stage == Stage::X_LOW || stage == Stage::Y_LOW) {
+  EndpointPair &points = active_servo() == 'a' ? a_points : b_points;
+  if (stage == Stage::A_LOW || stage == Stage::B_LOW) {
     points.low_us = active_pulse_us();
     points.angle_at_low_us = angle_deg;
-    stage = stage == Stage::X_LOW ? Stage::X_HIGH : Stage::Y_HIGH;
+    stage = stage == Stage::A_LOW ? Stage::A_HIGH : Stage::B_HIGH;
   } else {
     EndpointPair candidate = points;
     candidate.high_us = active_pulse_us();
     candidate.angle_at_high_us = angle_deg;
-    if (!validate_pair(candidate, active_axis())) {
+    if (!validate_pair(candidate, active_servo())) {
       return;
     }
     points = candidate;
-    if (stage == Stage::X_HIGH) {
-      stage = Stage::Y_LOW;
+    if (stage == Stage::A_HIGH) {
+      stage = Stage::B_LOW;
     } else {
       stage = Stage::COMPLETE;
-      print_result('x', x_points);
-      print_result('y', y_points);
+      print_result('a', a_points);
+      print_result('b', b_points);
       center_servos();
       Serial.println("COMPLETE");
     }
@@ -237,15 +237,15 @@ void handle_command(String command) {
     }
     reset_measurements();
     center_servos();
-    servo_x.attach(
-        system_config::servo_x::gpio_pin,
-        system_config::servo_x::calibration_search_min_pulse_us,
-        system_config::servo_x::calibration_search_max_pulse_us);
-    servo_y.attach(
-        system_config::servo_y::gpio_pin,
-        system_config::servo_y::calibration_search_min_pulse_us,
-        system_config::servo_y::calibration_search_max_pulse_us);
-    stage = Stage::X_LOW;
+    servo_a.attach(
+        system_config::servo_a::gpio_pin,
+        system_config::servo_a::calibration_search_min_pulse_us,
+        system_config::servo_a::calibration_search_max_pulse_us);
+    servo_b.attach(
+        system_config::servo_b::gpio_pin,
+        system_config::servo_b::calibration_search_min_pulse_us,
+        system_config::servo_b::calibration_search_max_pulse_us);
+    stage = Stage::A_LOW;
     write_positions();
     Serial.println("ACK ARM");
     print_state();
@@ -269,7 +269,7 @@ void handle_command(String command) {
   if (command == "RESET") {
     reset_measurements();
     center_servos();
-    stage = Stage::X_LOW;
+    stage = Stage::A_LOW;
     Serial.println("ACK RESET");
     print_state();
     print_prompt();

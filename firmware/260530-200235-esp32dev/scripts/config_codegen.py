@@ -57,9 +57,9 @@ def _require_number(
 
 
 def calibration_values(config: dict[str, Any]) -> dict[str, Any]:
-    if config.get("schema_version") != 2:
+    if config.get("schema_version") != 3:
         raise ConfigError(
-            "Servo calibration requires system_config.json schema_version 2"
+            "Servo calibration requires system_config.json schema_version 3"
         )
 
     values: dict[str, Any] = {
@@ -72,8 +72,8 @@ def calibration_values(config: dict[str, Any]) -> dict[str, Any]:
         ),
     }
 
-    for axis in ("x", "y"):
-        prefix = f"servos.axes.{axis}"
+    for servo_name in ("a", "b"):
+        prefix = f"servos.{servo_name}"
         pin = _require_int(config, f"{prefix}.gpio_pin", minimum=0)
         search_min = _require_int(
             config,
@@ -90,9 +90,9 @@ def calibration_values(config: dict[str, Any]) -> dict[str, Any]:
                 f"{prefix}.calibration_search_min_pulse_us must be less "
                 "than calibration_search_max_pulse_us"
             )
-        values[f"servo_{axis}_pin"] = pin
-        values[f"servo_{axis}_search_min_us"] = search_min
-        values[f"servo_{axis}_search_max_us"] = search_max
+        values[f"servo_{servo_name}_pin"] = pin
+        values[f"servo_{servo_name}_search_min_us"] = search_min
+        values[f"servo_{servo_name}_search_max_us"] = search_max
 
     return values
 
@@ -122,8 +122,8 @@ def production_values(config: dict[str, Any]) -> dict[str, Any]:
     values["imu_rate_hz"] = imu_rate_hz
 
     center_deg = values["servo_center_deg"]
-    for axis in ("x", "y"):
-        prefix = f"servos.axes.{axis}"
+    for servo_name in ("a", "b"):
+        prefix = f"servos.{servo_name}"
         missing = [
             key
             for key in (
@@ -137,7 +137,7 @@ def production_values(config: dict[str, Any]) -> dict[str, Any]:
         ]
         if missing:
             raise ConfigError(
-                f"Servo calibration required for axis {axis!r}: "
+                f"Servo calibration required for servo {servo_name!r}: "
                 f"missing {', '.join(missing)}"
             )
 
@@ -162,16 +162,16 @@ def production_values(config: dict[str, Any]) -> dict[str, Any]:
             raise ConfigError(f"{prefix}.min_deg must be less than max_deg")
         if not min_deg <= center_deg <= max_deg:
             raise ConfigError(
-                f"servos.center_deg must be within the calibrated {axis} range"
+                f"servos.center_deg must be within servo {servo_name!r}'s calibrated range"
             )
         if not (
-            values[f"servo_{axis}_search_min_us"]
+            values[f"servo_{servo_name}_search_min_us"]
             <= min_us
             < max_us
-            <= values[f"servo_{axis}_search_max_us"]
+            <= values[f"servo_{servo_name}_search_max_us"]
         ):
             raise ConfigError(
-                f"Calibrated pulse bounds for axis {axis!r} must remain "
+                f"Calibrated pulse bounds for servo {servo_name!r} must remain "
                 "inside its calibration search envelope"
             )
         if slope == 0.0:
@@ -188,12 +188,12 @@ def production_values(config: dict[str, Any]) -> dict[str, Any]:
                 f"{prefix}.deg_to_us does not reconstruct its pulse bounds"
             )
 
-        values[f"servo_{axis}_min_us"] = min_us
-        values[f"servo_{axis}_max_us"] = max_us
-        values[f"servo_{axis}_min_deg"] = min_deg
-        values[f"servo_{axis}_max_deg"] = max_deg
-        values[f"servo_{axis}_slope"] = slope
-        values[f"servo_{axis}_intercept"] = intercept
+        values[f"servo_{servo_name}_min_us"] = min_us
+        values[f"servo_{servo_name}_max_us"] = max_us
+        values[f"servo_{servo_name}_min_deg"] = min_deg
+        values[f"servo_{servo_name}_max_deg"] = max_deg
+        values[f"servo_{servo_name}_slope"] = slope
+        values[f"servo_{servo_name}_intercept"] = intercept
 
     return values
 
@@ -202,39 +202,39 @@ def render_header(config: dict[str, Any], *, production: bool) -> str:
     values = production_values(config) if production else calibration_values(config)
     fingerprint = calibration_fingerprint(config)
 
-    axis_blocks: list[str] = []
-    for axis in ("x", "y"):
+    servo_blocks: list[str] = []
+    for servo_name in ("a", "b"):
         lines = [
-            f"namespace servo_{axis} {{",
-            f"constexpr int gpio_pin = {values[f'servo_{axis}_pin']};",
+            f"namespace servo_{servo_name} {{",
+            f"constexpr int gpio_pin = {values[f'servo_{servo_name}_pin']};",
             (
                 "constexpr int calibration_search_min_pulse_us = "
-                f"{values[f'servo_{axis}_search_min_us']};"
+                f"{values[f'servo_{servo_name}_search_min_us']};"
             ),
             (
                 "constexpr int calibration_search_max_pulse_us = "
-                f"{values[f'servo_{axis}_search_max_us']};"
+                f"{values[f'servo_{servo_name}_search_max_us']};"
             ),
         ]
         if production:
             lines.extend(
                 [
-                    f"constexpr int min_pulse_us = {values[f'servo_{axis}_min_us']};",
-                    f"constexpr int max_pulse_us = {values[f'servo_{axis}_max_us']};",
-                    f"constexpr double min_deg = {values[f'servo_{axis}_min_deg']!r};",
-                    f"constexpr double max_deg = {values[f'servo_{axis}_max_deg']!r};",
+                    f"constexpr int min_pulse_us = {values[f'servo_{servo_name}_min_us']};",
+                    f"constexpr int max_pulse_us = {values[f'servo_{servo_name}_max_us']};",
+                    f"constexpr double min_deg = {values[f'servo_{servo_name}_min_deg']!r};",
+                    f"constexpr double max_deg = {values[f'servo_{servo_name}_max_deg']!r};",
                     (
                         "constexpr double deg_to_us_slope = "
-                        f"{values[f'servo_{axis}_slope']!r};"
+                        f"{values[f'servo_{servo_name}_slope']!r};"
                     ),
                     (
                         "constexpr double deg_to_us_intercept = "
-                        f"{values[f'servo_{axis}_intercept']!r};"
+                        f"{values[f'servo_{servo_name}_intercept']!r};"
                     ),
                 ]
             )
         lines.append("}")
-        axis_blocks.append("\n".join(lines))
+        servo_blocks.append("\n".join(lines))
 
     imu_line = ""
     if production:
@@ -254,9 +254,9 @@ constexpr double servo_center_deg = {values['servo_center_deg']!r};
 {imu_line}
 constexpr char calibration_fingerprint[] = "{fingerprint}";
 
-{axis_blocks[0]}
+{servo_blocks[0]}
 
-{axis_blocks[1]}
+{servo_blocks[1]}
 
 }}  // namespace system_config
 """

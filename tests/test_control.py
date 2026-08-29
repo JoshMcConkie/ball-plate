@@ -2,8 +2,7 @@ from ball_plate.config import (
     ControllerConfig,
     DegreeToMicrosecondsConfig,
     PlateConfig,
-    ServoAxesConfig,
-    ServoAxisConfig,
+    PhysicalServoConfig,
     ServoConfig,
 )
 from ball_plate.control import ServoController
@@ -29,14 +28,17 @@ def test_command_for_tilt_preserves_configured_tilt_bound():
 
     assert command.tilt_about_x_deg == controller.max_tilt_deg
     assert command.tilt_about_y_deg == -controller.max_tilt_deg
-    assert controller.servo_config.axes.x.min_deg <= command.servox_deg
-    assert command.servox_deg <= controller.servo_config.axes.x.max_deg
-    assert controller.servo_config.axes.y.min_deg <= command.servoy_deg
-    assert command.servoy_deg <= controller.servo_config.axes.y.max_deg
+    assert controller.servo_config.a.min_deg <= command.servo_a_deg
+    assert command.servo_a_deg <= controller.servo_config.a.max_deg
+    assert controller.servo_config.b.min_deg <= command.servo_b_deg
+    assert command.servo_b_deg <= controller.servo_config.b.max_deg
 
 
-def _axis_config(min_deg: float, max_deg: float) -> ServoAxisConfig:
-    return ServoAxisConfig(
+def _physical_servo_config(
+    min_deg: float,
+    max_deg: float,
+) -> PhysicalServoConfig:
+    return PhysicalServoConfig(
         gpio_pin=32,
         calibration_search_min_pulse_us=800,
         calibration_search_max_pulse_us=2200,
@@ -55,14 +57,12 @@ def _servo_config() -> ServoConfig:
     return ServoConfig(
         arm_length_m=0.05,
         center_deg=90.0,
-        axes=ServoAxesConfig(
-            x=_axis_config(80.0, 100.0),
-            y=_axis_config(70.0, 110.0),
-        ),
+        a=_physical_servo_config(80.0, 100.0),
+        b=_physical_servo_config(70.0, 110.0),
     )
 
 
-def test_command_for_tilt_uses_independent_axis_bounds():
+def test_command_for_tilt_uses_independent_physical_servo_bounds():
     controller = ServoController(
         controller_config=ControllerConfig(
             kp=1.0,
@@ -77,5 +77,8 @@ def test_command_for_tilt_uses_independent_axis_bounds():
 
     command = controller.command_for_tilt(20.0, 20.0)
 
-    assert command.servox_deg == 100.0
-    assert command.servoy_deg == 110.0
+    assert command.servo_a_deg == 100.0
+    assert command.servo_b_deg == 110.0
+    assert controller.x_acceleration_servo is controller.servo_config.a
+    assert controller.y_acceleration_servo is controller.servo_config.b
+    assert command.encode() == b"100.00, 110.00\n"

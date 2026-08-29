@@ -473,11 +473,11 @@ Relevant keys currently include:
 - `plate.height_m`
 - `servos.arm_length_m`
 - `servos.center_deg`
-- `servos.min_deg`
-- `servos.max_deg`
-- `servos.axes.*.gpio_pin`
-- `servos.axes.*.min_pulse_us`
-- `servos.axes.*.max_pulse_us`
+- `servos.{a,b}.min_deg`
+- `servos.{a,b}.max_deg`
+- `servos.{a,b}.gpio_pin`
+- `servos.{a,b}.min_pulse_us`
+- `servos.{a,b}.max_pulse_us`
 
 Do not duplicate those numeric values here.
 
@@ -500,10 +500,10 @@ Before any physical actuation or reasoning about hardware limits, read the activ
 Relevant protected configuration includes:
 - `controller.max_tilt_deg`
 - `servos.center_deg`
-- `servos.min_deg`
-- `servos.max_deg`
-- `servos.axes.*.min_pulse_us`
-- `servos.axes.*.max_pulse_us`
+- `servos.{a,b}.min_deg`
+- `servos.{a,b}.max_deg`
+- `servos.{a,b}.min_pulse_us`
+- `servos.{a,b}.max_pulse_us`
 - actuator geometry represented under `servos`
 
 Unless explicitly authorized:
@@ -543,6 +543,11 @@ Controller values represented in `data/system_config.json` must not be copied he
 
 #### Controller → Actuator Mapping
 - Preserve command axis semantics, units, saturation, and neutral convention.
+- Physical servos use frame-neutral identities `A` and `B`.
+- Preserve the current real-system mapping and serial order: the X-acceleration
+  command channel is sent first to servo A, and the Y-acceleration command
+  channel is sent second to servo B.
+- The A/B identities do not establish roll/pitch or simulation-axis semantics.
 
 #### Simulation ↔ Real-System Abstraction
 - Prefer compatible logical state/command interfaces so algorithms can be compared across simulation and hardware.

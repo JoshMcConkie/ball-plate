@@ -15,6 +15,10 @@ class ServoController:
         self.alpha = controller_config.derivative_filter_alpha
         self.max_integral = self.max_tilt_deg / self.ki
         self.servo_config = servo_config
+        # Preserve the existing control-to-hardware mapping while giving the
+        # physical actuators frame-neutral identities.
+        self.x_acceleration_servo = servo_config.a
+        self.y_acceleration_servo = servo_config.b
         self.plate = plate_config
         self.reset()
 
@@ -34,9 +38,9 @@ class ServoController:
         # Clamp to asin domain in case the requested tilt exceeds the arm's reach.
         # asin(...) is the servo deflection from flat; offset by the firmware
         # neutral (90 deg) so a balanced plate commands flat instead of an extreme.
-        servox_deg = self.servo_config.center_deg + degrees(asin(max(-1.0, min(1.0, arg_x))))
-        servoy_deg = self.servo_config.center_deg + degrees(asin(max(-1.0, min(1.0, arg_y))))
-        return servox_deg, servoy_deg
+        servo_a_deg = self.servo_config.center_deg + degrees(asin(max(-1.0, min(1.0, arg_x))))
+        servo_b_deg = self.servo_config.center_deg + degrees(asin(max(-1.0, min(1.0, arg_y))))
+        return servo_a_deg, servo_b_deg
 
     def command_for_tilt(self,tilt_about_x_deg: float,
                         tilt_about_y_deg: float ) -> ControlCommand:
@@ -48,21 +52,21 @@ class ServoController:
             -self.max_tilt_deg,
             min(self.max_tilt_deg, tilt_about_y_deg),
         )
-        servox_deg, servoy_deg = self.get_servo_angles(
+        servo_a_deg, servo_b_deg = self.get_servo_angles(
             tilt_about_x_deg,
             tilt_about_y_deg)
 
-        servox_deg = max(
-            self.servo_config.axes.x.min_deg,
-            min(self.servo_config.axes.x.max_deg, servox_deg))
-        servoy_deg = max(
-            self.servo_config.axes.y.min_deg,
-            min(self.servo_config.axes.y.max_deg, servoy_deg))
+        servo_a_deg = max(
+            self.x_acceleration_servo.min_deg,
+            min(self.x_acceleration_servo.max_deg, servo_a_deg))
+        servo_b_deg = max(
+            self.y_acceleration_servo.min_deg,
+            min(self.y_acceleration_servo.max_deg, servo_b_deg))
 
         return ControlCommand(
             time.monotonic(),
             tilt_about_x_deg,tilt_about_y_deg,
-            servox_deg, servoy_deg)
+            servo_a_deg, servo_b_deg)
 
     def get_command(self,system: SystemState, ref: ReferenceState)->ControlCommand:
         error_x = ref.x_goal - system.ball.x

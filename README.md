@@ -34,7 +34,7 @@ flowchart TB
     end
 
     HSER <-->|commands + telemetry| USB
-    USB <-->|servo_x servo_y / ax ay az gx gy gz| MSER
+    USB <-->|servo_a servo_b / ax ay az gx gy gz| MSER
 
     SERVO -.->|tilts| PLATE
     PLATE -.->|observed by| CAM
@@ -81,7 +81,7 @@ SystemState     → controller → ControlCommand
 
 ### Actuation (firmware, `firmware/.../src/main.cpp`)
 
-- ESP32 (PlatformIO) parses `"servo_x, servo_y\n"` degree commands at the configured serial baud, constrains each axis to its calibrated limits, and applies its calibrated degree-to-microsecond map.
+- ESP32 (PlatformIO) parses `"servo_a, servo_b\n"` degree commands at the configured serial baud, constrains each physical servo to its calibrated limits, and applies its calibrated degree-to-microsecond map. Command order is unchanged: the X-acceleration channel maps to servo A and the Y-acceleration channel maps to servo B.
 - Streams LSM6DSO accelerometer + gyro packets back over serial at the configured firmware rate. The host currently uses only acceleration to estimate plate attitude.
 - `firmware/.../scratch/` holds standalone servo-calibration and serial-test sketches.
 
@@ -94,7 +94,7 @@ SystemState     → controller → ControlCommand
 | --------- | ----------------------------------------------------------------------- |
 | MCU       | ESP32 dev board                                                         |
 | IMU       | SparkFun LSM6DSO (I2C, mounted to the plate)                            |
-| Actuation | 2× hobby servos (X and Y axes), 23 mm arms                              |
+| Actuation | 2× hobby servos, physically labeled A and B                             |
 | Plate     | 22 cm × 22 cm                                                           |
 | Camera    | Linux/V4L2 USB webcam, fixed above the table (`/dev/video0` by default) |
 | Ball      |                                                                         |
@@ -132,7 +132,7 @@ In the exposure window, use Up/Down to adjust brightness and Space to continue. 
 
 The `ball-plate` console command is still a placeholder; use the module command above.`pyproject.toml`/`uv.lock` define the supported environment.
 
-Firmware: open `firmware/260530-200235-esp32dev/` with PlatformIO and upload the `esp32dev` environment to the ESP32. Production configuration and firmware generation intentionally stop with a `Servo calibration required` error until both servo axes have measured calibration data.
+Firmware: open `firmware/260530-200235-esp32dev/` with PlatformIO and upload the `esp32dev` environment to the ESP32. Production configuration and firmware generation intentionally stop with a `Servo calibration required` error until both physical servos have measured calibration data.
 
 Runtime values, hardware pins, and calibration data come from `data/system_config.json`; `src/ball_plate/config.py` defines the corresponding host-side types.
 
@@ -140,7 +140,7 @@ Runtime values, hardware pins, and calibration data come from `data/system_confi
 
 Servo calibration is an attended hardware procedure. The calibration wizard never builds, uploads, or flashes firmware itself.
 
-1. Review each axis's `calibration_search_min_pulse_us` and `calibration_search_max_pulse_us` in `data/system_config.json`. These are safety/search envelopes and are not measured servo limits.
+1. Review servo A and servo B's `calibration_search_min_pulse_us` and `calibration_search_max_pulse_us` in `data/system_config.json`. These are safety/search envelopes and are not measured servo limits.
 2. Clear the mechanism workspace, keep power and reset controls within reach, and manually build and upload the calibration image:
 
    ```bash
@@ -156,7 +156,7 @@ Servo calibration is an attended hardware procedure. The calibration wizard neve
    ```
 
 4. Type `ARM` only when ready. For each prompted endpoint, use `jog <signed_us>` or `set <pulse_us>`, then enter `capture` and the manually measured arm angle. The firmware rejects motion outside the configured search envelope.
-5. After all four measurements, type `DISARM`. Review the proposed per-axis pulse bounds, degree bounds, and `deg_to_us` coefficients; type `WRITE` to atomically update the active configuration.
+5. After all four measurements, type `DISARM`. Review the proposed per-servo pulse bounds, degree bounds, and `deg_to_us` coefficients; type `WRITE` to atomically update the active configuration.
 6. Manually restore the production image after calibration:
 
    ```bash
@@ -170,7 +170,7 @@ Enter `abort` or press Ctrl+C to stop the wizard; it attempts to center and deta
 
 - **Host/embedded split.** Estimation and control live in Python for fast iteration; the ESP32 handles servo pulses, IMU reads, and serial I/O. The serial protocol is plain-text and line-oriented.
 - **Typed state boundaries.** Each stage intakes and produces a dataclass, so every stage can be tested and swapped independently (e.g. replacing the finite-difference estimator with a Kalman filter changes one function, not the loop).
-- **Bound actuator commands.** Tilt commands use the configured controller limit, inverse kinematics clamps the `asin` input, and each firmware servo command is constrained to its measured per-axis degree and pulse bounds. Integral state is also bounded.
+- **Bound actuator commands.** Tilt commands use the configured controller limit, inverse kinematics clamps the `asin` input, and each firmware servo command is constrained to its measured degree and pulse bounds. Integral state is also bounded.
 
 
 

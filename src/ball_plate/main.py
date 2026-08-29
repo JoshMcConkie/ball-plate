@@ -120,8 +120,8 @@ while True:
                    5, (0, 255, 0), 1)
         cv2.imshow("Ball Position", frame)
         print(f"Ball Position: {ball_state.x}, {ball_state.y} | "
-              f"Servo Command: {control_cmd.servox_deg:.2f}, "
-              f"{control_cmd.servoy_deg:.2f}")
+              f"Servo Command A/B: {control_cmd.servo_a_deg:.2f}, "
+              f"{control_cmd.servo_b_deg:.2f}")
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 camera.feed.release()

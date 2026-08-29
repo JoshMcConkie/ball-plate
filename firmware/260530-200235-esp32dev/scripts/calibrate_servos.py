@@ -17,11 +17,11 @@ from config_codegen import calibration_fingerprint, calibration_values
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / "data" / "system_config.json"
-AXIS_SEQUENCE = (
-    ("x", "min_pulse"),
-    ("x", "max_pulse"),
-    ("y", "min_pulse"),
-    ("y", "max_pulse"),
+SERVO_SEQUENCE = (
+    ("a", "min_pulse"),
+    ("a", "max_pulse"),
+    ("b", "min_pulse"),
+    ("b", "max_pulse"),
 )
 
 
@@ -44,7 +44,7 @@ class SerialConnection(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class AxisCalibration:
+class ServoCalibration:
     min_pulse_us: int
     angle_at_min_pulse_us: float
     max_pulse_us: int
@@ -64,7 +64,7 @@ def lround(value: float) -> int:
 
 def map_degrees_to_microseconds(
     angle_deg: float,
-    calibration: AxisCalibration,
+    calibration: ServoCalibration,
 ) -> int:
     mapped = lround(
         calibration.slope_us_per_deg * angle_deg
@@ -76,7 +76,7 @@ def map_degrees_to_microseconds(
     )
 
 
-def calculate_axis_calibration(
+def calculate_servo_calibration(
     *,
     min_pulse_us: int,
     angle_at_min_pulse_us: float,
@@ -85,7 +85,7 @@ def calculate_axis_calibration(
     search_min_pulse_us: int,
     search_max_pulse_us: int,
     center_deg: float,
-) -> AxisCalibration:
+) -> ServoCalibration:
     angles = (angle_at_min_pulse_us, angle_at_max_pulse_us)
     if not all(math.isfinite(angle) for angle in angles):
         raise CalibrationError("Endpoint angles must be finite")
@@ -119,7 +119,7 @@ def calculate_axis_calibration(
         angle_at_max_pulse_us - angle_at_min_pulse_us
     )
     intercept = min_pulse_us - slope * angle_at_min_pulse_us
-    result = AxisCalibration(
+    result = ServoCalibration(
         min_pulse_us=min_pulse_us,
         angle_at_min_pulse_us=angle_at_min_pulse_us,
         max_pulse_us=max_pulse_us,
@@ -140,12 +140,12 @@ def calculate_axis_calibration(
     return result
 
 
-def parse_result_line(line: str) -> tuple[str, AxisCalibration]:
+def parse_result_line(line: str) -> tuple[str, ServoCalibration]:
     fields = line.split()
-    if len(fields) != 10 or fields[0] != "RESULT" or fields[1] not in {"x", "y"}:
+    if len(fields) != 10 or fields[0] != "RESULT" or fields[1] not in {"a", "b"}:
         raise CalibrationError(f"Malformed firmware result: {line!r}")
     try:
-        calibration = AxisCalibration(
+        calibration = ServoCalibration(
             min_pulse_us=int(fields[2]),
             angle_at_min_pulse_us=float(fields[3]),
             max_pulse_us=int(fields[4]),
@@ -161,20 +161,20 @@ def parse_result_line(line: str) -> tuple[str, AxisCalibration]:
 
 
 def validate_firmware_result(
-    axis: str,
-    reported: AxisCalibration,
+    servo_name: str,
+    reported: ServoCalibration,
     config: dict,
-) -> AxisCalibration:
-    axis_config = config["servos"]["axes"][axis]
-    expected = calculate_axis_calibration(
+) -> ServoCalibration:
+    servo_config = config["servos"][servo_name]
+    expected = calculate_servo_calibration(
         min_pulse_us=reported.min_pulse_us,
         angle_at_min_pulse_us=reported.angle_at_min_pulse_us,
         max_pulse_us=reported.max_pulse_us,
         angle_at_max_pulse_us=reported.angle_at_max_pulse_us,
-        search_min_pulse_us=axis_config[
+        search_min_pulse_us=servo_config[
             "calibration_search_min_pulse_us"
         ],
-        search_max_pulse_us=axis_config[
+        search_max_pulse_us=servo_config[
             "calibration_search_max_pulse_us"
         ],
         center_deg=config["servos"]["center_deg"],
@@ -192,23 +192,23 @@ def validate_firmware_result(
             abs_tol=1e-6,
         ):
             raise CalibrationError(
-                f"Firmware and host calculations disagree for axis {axis!r}"
+                f"Firmware and host calculations disagree for servo {servo_name!r}"
             )
     return expected
 
 
 def apply_calibrations(
     config: dict,
-    calibrations: dict[str, AxisCalibration],
+    calibrations: dict[str, ServoCalibration],
 ) -> dict:
-    if set(calibrations) != {"x", "y"}:
-        raise CalibrationError("Both X and Y calibration results are required")
+    if set(calibrations) != {"a", "b"}:
+        raise CalibrationError("Both servo A and servo B results are required")
 
     updated = copy.deepcopy(config)
-    for axis in ("x", "y"):
-        result = calibrations[axis]
-        axis_config = updated["servos"]["axes"][axis]
-        axis_config.update(
+    for servo_name in ("a", "b"):
+        result = calibrations[servo_name]
+        servo_config = updated["servos"][servo_name]
+        servo_config.update(
             {
                 "min_pulse_us": result.min_pulse_us,
                 "max_pulse_us": result.max_pulse_us,
@@ -323,14 +323,14 @@ def _require_success(lines: list[str]) -> None:
 def _prompt_for_endpoint(
     connection: SerialConnection,
     *,
-    axis: str,
+    servo_name: str,
     endpoint: str,
     final_endpoint: bool,
     input_fn: Callable[[str], str],
     output: Callable[[str], None],
 ) -> list[str]:
     output(
-        f"\nAxis {axis.upper()} {endpoint.replace('_', ' ')}: jog to the "
+        f"\nServo {servo_name.upper()} {endpoint.replace('_', ' ')}: jog to the "
         "desired pose, then capture its measured arm angle."
     )
     output("Commands: jog <signed_us>, set <pulse_us>, status, capture, abort")
@@ -383,7 +383,7 @@ def run_session(
     *,
     input_fn: Callable[[str], str] = input,
     output: Callable[[str], None] = print,
-) -> dict[str, AxisCalibration]:
+) -> dict[str, ServoCalibration]:
     expected_fingerprint = calibration_fingerprint(config)
     wait_for_ready(connection, expected_fingerprint=expected_fingerprint)
     output(f"Connected to matching calibration firmware ({expected_fingerprint}).")
@@ -406,13 +406,13 @@ def run_session(
         _require_success(lines)
         armed = True
 
-        for index, (axis, endpoint) in enumerate(AXIS_SEQUENCE):
+        for index, (servo_name, endpoint) in enumerate(SERVO_SEQUENCE):
             result_lines.extend(
                 _prompt_for_endpoint(
                     connection,
-                    axis=axis,
+                    servo_name=servo_name,
                     endpoint=endpoint,
-                    final_endpoint=index == len(AXIS_SEQUENCE) - 1,
+                    final_endpoint=index == len(SERVO_SEQUENCE) - 1,
                     input_fn=input_fn,
                     output=output,
                 )
@@ -443,11 +443,13 @@ def run_session(
         for line in result_lines
         if line.startswith("RESULT ")
     )
-    if set(reported) != {"x", "y"}:
-        raise CalibrationError("Firmware did not return both axis results")
+    if set(reported) != {"a", "b"}:
+        raise CalibrationError("Firmware did not return both servo results")
     return {
-        axis: validate_firmware_result(axis, reported[axis], config)
-        for axis in ("x", "y")
+        servo_name: validate_firmware_result(
+            servo_name, reported[servo_name], config
+        )
+        for servo_name in ("a", "b")
     }
 
 

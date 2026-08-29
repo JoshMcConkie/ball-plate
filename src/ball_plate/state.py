@@ -88,12 +88,11 @@ class ControlCommand:
     timestamp: float
     tilt_about_x_deg: float
     tilt_about_y_deg: float
-    servox_deg: float
-    servoy_deg: float
+    servo_a_deg: float
+    servo_b_deg: float
 
     def get_cmd_str(self):
-        return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n"
+        return f"{self.servo_a_deg:.2f}, {self.servo_b_deg:.2f}\n"
 
     def encode(self,encoding: str = "utf-8", errors: str = "strict") -> bytes:
-        return f"{self.servox_deg:.2f}, {self.servoy_deg:.2f}\n".encode(encoding,errors)
-
+        return f"{self.servo_a_deg:.2f}, {self.servo_b_deg:.2f}\n".encode(encoding,errors)

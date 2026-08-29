@@ -24,7 +24,7 @@ sys.modules[spec.name] = calibrate_servos
 spec.loader.exec_module(calibrate_servos)
 
 
-AxisCalibration = calibrate_servos.AxisCalibration
+ServoCalibration = calibrate_servos.ServoCalibration
 CalibrationCancelled = calibrate_servos.CalibrationCancelled
 CalibrationError = calibrate_servos.CalibrationError
 
@@ -36,7 +36,7 @@ def load_config() -> dict:
 def result_for(
     *, min_us=900, low_angle=30.0, max_us=2100, high_angle=150.0
 ):
-    return calibrate_servos.calculate_axis_calibration(
+    return calibrate_servos.calculate_servo_calibration(
         min_pulse_us=min_us,
         angle_at_min_pulse_us=low_angle,
         max_pulse_us=max_us,
@@ -96,7 +96,7 @@ def test_invalid_calibration_is_rejected(overrides, message):
     arguments.update(overrides)
 
     with pytest.raises(CalibrationError, match=message):
-        calibrate_servos.calculate_axis_calibration(**arguments)
+        calibrate_servos.calculate_servo_calibration(**arguments)
 
 
 def test_apply_calibrations_preserves_unrelated_config():
@@ -104,12 +104,12 @@ def test_apply_calibrations_preserves_unrelated_config():
     config["unrelated"] = {"preserve": True}
     updated = calibrate_servos.apply_calibrations(
         config,
-        {"x": result_for(), "y": result_for(low_angle=150, high_angle=30)},
+        {"a": result_for(), "b": result_for(low_angle=150, high_angle=30)},
     )
 
     assert updated["unrelated"] == {"preserve": True}
-    assert config["servos"]["axes"]["x"]["deg_to_us"] is None
-    assert updated["servos"]["axes"]["y"]["deg_to_us"] == {
+    assert config["servos"]["a"]["deg_to_us"] is None
+    assert updated["servos"]["b"]["deg_to_us"] == {
         "slope_us_per_deg": -10.0,
         "intercept_us": 2400.0,
     }
@@ -182,18 +182,18 @@ class FakeSerial:
                 self.lines.append(b"ERROR STATE cannot arm\n")
             else:
                 self.lines.extend(
-                    [b"ACK ARM\n", b"STATE X_LOW x 1500 y 1500\n", b"PROMPT x min_pulse\n"]
+                    [b"ACK ARM\n", b"STATE A_LOW a 1500 b 1500\n", b"PROMPT a min_pulse\n"]
                 )
         elif command.startswith("SET "):
-            self.lines.extend([b"ACK SET\n", b"STATE MOVED x 900 y 1500\n"])
+            self.lines.extend([b"ACK SET\n", b"STATE MOVED a 900 b 1500\n"])
         elif command.startswith("CAPTURE "):
             responses = (
-                [b"STATE X_HIGH x 900 y 1500\n", b"PROMPT x max_pulse\n"],
-                [b"STATE Y_LOW x 2100 y 1500\n", b"PROMPT y min_pulse\n"],
-                [b"STATE Y_HIGH x 2100 y 900\n", b"PROMPT y max_pulse\n"],
+                [b"STATE A_HIGH a 900 b 1500\n", b"PROMPT a max_pulse\n"],
+                [b"STATE B_LOW a 2100 b 1500\n", b"PROMPT b min_pulse\n"],
+                [b"STATE B_HIGH a 2100 b 900\n", b"PROMPT b max_pulse\n"],
                 [
-                    b"RESULT x 900 30.000000000 2100 150.000000000 30.000000000 150.000000000 10.000000000 600.000000000\n",
-                    b"RESULT y 900 150.000000000 2100 30.000000000 30.000000000 150.000000000 -10.000000000 2400.000000000\n",
+                    b"RESULT a 900 30.000000000 2100 150.000000000 30.000000000 150.000000000 10.000000000 600.000000000\n",
+                    b"RESULT b 900 150.000000000 2100 30.000000000 30.000000000 150.000000000 -10.000000000 2400.000000000\n",
                     b"COMPLETE\n",
                 ],
             )
@@ -218,7 +218,7 @@ def input_sequence(*answers):
     return lambda prompt: next(iterator)
 
 
-def test_run_session_collects_and_verifies_both_axes():
+def test_run_session_collects_and_verifies_both_servos():
     config = load_config()
     connection = FakeSerial(calibration_fingerprint(config))
     input_fn = input_sequence(
@@ -234,8 +234,8 @@ def test_run_session_collects_and_verifies_both_axes():
         connection, config, input_fn=input_fn, output=lambda line: None
     )
 
-    assert results["x"].slope_us_per_deg == 10.0
-    assert results["y"].slope_us_per_deg == -10.0
+    assert results["a"].slope_us_per_deg == 10.0
+    assert results["b"].slope_us_per_deg == -10.0
     assert connection.commands[-1] == "DISARM"
 
 
@@ -296,6 +296,10 @@ def test_codegen_allows_calibration_but_blocks_production_until_complete():
 
     calibration_header = render_header(config, production=False)
     assert "calibration_search_min_pulse_us" in calibration_header
+    assert "namespace servo_a" in calibration_header
+    assert "namespace servo_b" in calibration_header
+    assert "namespace servo_x" not in calibration_header
+    assert "namespace servo_y" not in calibration_header
     with pytest.raises(ConfigError, match="Servo calibration required"):
         render_header(config, production=True)
 
@@ -304,7 +308,7 @@ def test_codegen_renders_verified_production_map():
     config = load_config()
     updated = calibrate_servos.apply_calibrations(
         config,
-        {"x": result_for(), "y": result_for(low_angle=150, high_angle=30)},
+        {"a": result_for(), "b": result_for(low_angle=150, high_angle=30)},
     )
 
     header = render_header(updated, production=True)

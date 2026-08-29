@@ -15,12 +15,12 @@ from ball_plate.config import (
 def _calibrated_config() -> dict:
     with DEFAULT_CONFIG_PATH.open(encoding="utf-8") as file:
         data = copy.deepcopy(json.load(file))
-    for axis, slope, intercept in (
-        ("x", 10.0, 600.0),
-        ("y", -10.0, 2400.0),
+    for servo_name, slope, intercept in (
+        ("a", 10.0, 600.0),
+        ("b", -10.0, 2400.0),
     ):
-        axis_data = data["servos"]["axes"][axis]
-        axis_data.update(
+        servo_data = data["servos"][servo_name]
+        servo_data.update(
             {
                 "min_pulse_us": 900,
                 "max_pulse_us": 2100,
@@ -35,8 +35,17 @@ def _calibrated_config() -> dict:
     return data
 
 
+def test_servo_config_uses_frame_neutral_physical_names():
+    with DEFAULT_CONFIG_PATH.open(encoding="utf-8") as file:
+        servo_data = json.load(file)["servos"]
+
+    assert "a" in servo_data
+    assert "b" in servo_data
+    assert "axes" not in servo_data
+
+
 def test_default_config_requires_servo_calibration():
-    with pytest.raises(ServoCalibrationRequiredError, match="axis 'x'"):
+    with pytest.raises(ServoCalibrationRequiredError, match="servo 'a'"):
         load_system_config()
 
 
@@ -54,5 +63,5 @@ def test_load_system_config_initializes_calibration_config(tmp_path):
         assert isinstance(path, Path)
         assert path == Path(configured_path)
 
-    assert config.servos.axes.x.min_deg == 30.0
-    assert config.servos.axes.y.deg_to_us.slope_us_per_deg == -10.0
+    assert config.servos.a.min_deg == 30.0
+    assert config.servos.b.deg_to_us.slope_us_per_deg == -10.0
